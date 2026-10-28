@@ -87,7 +87,7 @@ test("Voice toggle and readiness guidance stay in Messaging while routing IDs st
 test("Voice readiness reports only a confirmed empty issue list as configured", () => {
     const script = settingsScript();
     const readiness = script.slice(script.indexOf("function renderVoiceReadiness()"), script.indexOf("function populateSettings()"));
-    const fields = { voiceReadiness: { textContent: "" }, sEnableVoice: { checked: false } };
+    const fields = { voiceReadiness: { textContent: "", dataset: {} }, sEnableVoice: { checked: false } };
     const context = { _settings: {}, document: { getElementById: (id) => fields[id] } };
     vm.createContext(context);
     vm.runInContext(readiness, context);
@@ -99,10 +99,12 @@ test("Voice readiness reports only a confirmed empty issue list as configured", 
     context._settings.voiceReadinessIssues = ["Voice number must be E.164"];
     context.renderVoiceReadiness();
     assert.match(fields.voiceReadiness.textContent, /Last saved Voice setup needs: Voice number must be E\.164/);
+    assert.equal(fields.voiceReadiness.dataset.state, "warning");
 
     context._settings.voiceReadinessIssues = [];
     context.renderVoiceReadiness();
     assert.match(fields.voiceReadiness.textContent, /Last saved Voice configuration passes checks\. Enable Voice and save/);
+    assert.equal(fields.voiceReadiness.dataset.state, "ready");
     fields.sEnableVoice.checked = true;
     context.renderVoiceReadiness();
     assert.match(fields.voiceReadiness.textContent, /Save edits to recheck, then place a test call/);
@@ -229,6 +231,51 @@ test("printer refresh keeps the current selection while the checklist is loading
     assert.deepEqual(renderedSelection, ["printer A"]);
 });
 
+test("Settings preview thumbnails wait until Art Styles is opened", () => {
+    const script = settingsScript();
+    const previewFunctions = script.slice(
+        script.indexOf("var _stylePreviewCache = new Map()"),
+        script.indexOf("function renderPhoneTags()"),
+    );
+    const thumb = {
+        id: "sp0", dataset: { previewStyle: "cartoon" }, nodes: [],
+        replaceChildren() { this.nodes = []; },
+        appendChild(node) { this.nodes.push(node); },
+    };
+    let collapsed = true;
+    const list = {
+        closest: () => ({ classList: { contains: () => collapsed } }),
+        querySelectorAll: () => [thumb],
+    };
+    let requests = 0;
+    class VisibleObserver {
+        constructor(callback) { this.callback = callback; }
+        observe(target) { this.callback([{ isIntersecting: true, target }]); }
+        unobserve() {}
+        disconnect() {}
+    }
+    const context = {
+        Map, Set, _baselineBody: {}, _activeSection: "event",
+        window: { IntersectionObserver: VisibleObserver },
+        IntersectionObserver: VisibleObserver,
+        document: {
+            getElementById: (id) => id === "stylesList" ? list : thumb,
+            createElement: () => ({ className: "", textContent: "" }),
+        },
+        fetch: () => { requests++; return Promise.resolve({ ok: true, json: async () => ({ image: null }) }); },
+    };
+    vm.createContext(context);
+    vm.runInContext(previewFunctions, context);
+    context.loadStylePreviews();
+    assert.equal(requests, 0, "Event section does not request every style preview");
+    context._activeSection = "portrait";
+    context.loadStylePreviews();
+    assert.equal(requests, 0, "closed Art Styles card does not request previews");
+    collapsed = false;
+    context.loadStylePreviews();
+    assert.equal(requests, 1, "opening Art Styles requests its visible preview");
+});
+
 test("local fixture preview serves sample pages and refuses every write", () => {
     const server = createPreviewServer();
     function request(method, url) {
@@ -237,16 +284,58 @@ test("local fixture preview serves sample pages and refuses every write", () => 
             writeHead(status, headers) { result.status = status; result.headers = headers; },
             end(body = "") { result.body = body.toString(); },
         };
-        server.emit("request", { method, url }, response);
+        server.emit("request", { method, url, headers: {} }, response);
         return result;
     }
     const home = request("GET", "/home/");
     const settings = request("GET", "/home/settings?section=advanced");
+    const dashboard = request("GET", "/dashboard/");
+    const logsPage = request("GET", "/dashboard/logs/");
+    const outreach = request("GET", "/outreach/");
+    const gallery = request("GET", "/photogallery/");
+    const review = request("GET", "/review/queue");
+    const reviewSettings = request("GET", "/review/settings");
+    const evalRuns = request("GET", "/eval");
+    const evalNew = request("GET", "/eval/new");
+    const evalPhotos = request("GET", "/eval/photos");
+    const evalVariants = request("GET", "/eval/variants");
+    const evalDetail = request("GET", "/eval/run/demo-run-001");
     const state = JSON.parse(request("GET", "/dashboard/api/settings").body);
+    const recipients = JSON.parse(request("GET", "/outreach/api/users?paged=1&event=DEMO%20EVENT&page=1&limit=5").body);
+    const portraits = JSON.parse(request("GET", "/photogallery/api/images?event=DEMO%20EVENT&limit=6").body);
+    const jobs = request("GET", "/dashboard/api/done-jobs?e=DEMO%20EVENT&limit=3");
+    const logs = JSON.parse(request("GET", "/dashboard/api/logs?limit=4").body);
+    const reviews = JSON.parse(request("GET", "/review/api/queue?e=DEMO%20EVENT&limit=5").body);
+    const dashboardReviews = request("GET", "/dashboard/api/review-queue?e=DEMO%20EVENT&limit=12");
+    const runSummary = JSON.parse(request("GET", "/eval/api/runs/demo-run-001/summary").body);
     const rejected = request("POST", "/dashboard/api/settings");
     assert.match(home.body, /Read-only demo preview · sample data/);
     assert.match(settings.body, /Read-only demo preview · sample data/);
+    assert.match(dashboard.body, /Dashboard — Twilio Photobooth/);
+    assert.match(logsPage.body, /Application logs/);
+    assert.match(outreach.body, /Outreach — Twilio Photobooth/);
+    assert.match(gallery.body, /Photo Book — Twilio Photobooth/);
+    assert.match(review.body, /Review portraits/);
+    assert.match(reviewSettings.body, /Settings — Twilio Photobooth/);
+    assert.match(evalRuns.body, /Prompt runs/);
+    assert.match(evalNew.body, /New experiment/);
+    assert.match(evalPhotos.body, /Test photos/);
+    assert.match(evalVariants.body, /Saved variants/);
+    assert.match(evalDetail.body, /Cartoon detail/);
+    assert.match(evalDetail.body, /Page 1 of 2/);
     assert.equal(state.eventName, "DEMO EVENT");
+    assert.equal(recipients.items.length, 5);
+    assert.ok(recipients.total > recipients.items.length);
+    assert.equal(portraits.images.length, 6);
+    assert.ok(portraits.total > portraits.images.length);
+    assert.equal(JSON.parse(jobs.body).length, 3);
+    assert.ok(Number(jobs.headers["X-Total-Count"]) > 3);
+    assert.equal(logs.length, 4);
+    assert.equal(reviews.items.length, 5);
+    assert.ok(reviews.total > reviews.items.length);
+    assert.equal(JSON.parse(dashboardReviews.body).length, 12);
+    assert.equal(Number(dashboardReviews.headers["X-Total-Count"]), 30);
+    assert.equal(runSummary.totals.total, 132);
     assert.deepEqual(Object.keys(state).filter((key) => ["openaiApiKey", "twilioAuthToken", "dubApiKey", "printRelayKey", "reviewPin"].includes(key)), []);
     assert.equal(rejected.status, 405);
 });

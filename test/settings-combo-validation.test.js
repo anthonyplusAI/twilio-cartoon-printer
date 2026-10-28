@@ -1,38 +1,41 @@
 const { test, before, after } = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("fs");
+const os = require("node:os");
 const path = require("path");
 
-const SETTINGS_FILE = path.join(__dirname, "..", "data", "settings.json");
-const EVENT_PROFILE_FILE = path.join(__dirname, "..", "data", "events", "default", "settings.json");
-let _originalSettings = null;
-let _originalEventProfile = null;
+const projectRoot = path.join(__dirname, "..");
+let fixtureRoot;
+let fixtureSettingsPath;
 
 before(() => {
-    if (fs.existsSync(SETTINGS_FILE)) {
-        _originalSettings = fs.readFileSync(SETTINGS_FILE, "utf-8");
-    }
-    if (fs.existsSync(EVENT_PROFILE_FILE)) {
-        _originalEventProfile = fs.readFileSync(EVENT_PROFILE_FILE, "utf-8");
-    }
+    // Run against a synthetic installation so validation cannot inspect or
+    // rewrite the operator's active event, profile, or environment secrets.
+    fixtureRoot = fs.mkdtempSync(path.join(os.tmpdir(), "settings-combo-"));
+    const fixtureLib = path.join(fixtureRoot, "lib");
+    fs.mkdirSync(path.join(fixtureLib, "voice"), { recursive: true });
+    fs.mkdirSync(path.join(fixtureRoot, "data", "events", "default"), { recursive: true });
+    fs.mkdirSync(path.join(fixtureRoot, "templates"), { recursive: true });
+    fixtureSettingsPath = path.join(fixtureLib, "settings.js");
+    const settingsSource = fs.readFileSync(path.join(projectRoot, "lib", "settings.js"), "utf8");
+    fs.writeFileSync(fixtureSettingsPath,
+        'const process = { pid: require("node:process").pid, env: Object.create(null) };\n' + settingsSource);
+    fs.copyFileSync(path.join(projectRoot, "lib", "styles.js"), path.join(fixtureLib, "styles.js"));
+    fs.copyFileSync(path.join(projectRoot, "lib", "voice", "readiness.js"),
+        path.join(fixtureLib, "voice", "readiness.js"));
+    fs.symlinkSync(path.join(projectRoot, "node_modules"), path.join(fixtureRoot, "node_modules"), "dir");
+    fs.writeFileSync(path.join(fixtureRoot, "data", "settings.json"), JSON.stringify({ eventName: "default" }));
+    fs.writeFileSync(path.join(fixtureRoot, "data", "events", "default", "settings.json"), "{}");
 });
 
 after(() => {
-    if (_originalSettings !== null) {
-        fs.writeFileSync(SETTINGS_FILE, _originalSettings);
-    } else if (fs.existsSync(SETTINGS_FILE)) {
-        fs.unlinkSync(SETTINGS_FILE);
-    }
-    if (_originalEventProfile !== null) {
-        fs.writeFileSync(EVENT_PROFILE_FILE, _originalEventProfile);
-    } else if (fs.existsSync(EVENT_PROFILE_FILE)) {
-        fs.unlinkSync(EVENT_PROFILE_FILE);
-    }
+    if (fixtureSettingsPath) delete require.cache[fixtureSettingsPath];
+    if (fixtureRoot) fs.rmSync(fixtureRoot, { recursive: true, force: true });
 });
 
 function freshSettings() {
-    delete require.cache[require.resolve("../lib/settings")];
-    const s = require("../lib/settings");
+    delete require.cache[fixtureSettingsPath];
+    const s = require(fixtureSettingsPath);
     s.load();
     return s;
 }

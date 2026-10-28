@@ -1,0 +1,431 @@
+/* Gallery workspace chrome. The book's paper and page-turn treatment stays in
+   photogallery.js; this layer keeps controls and management consistent with
+   the current Twilio admin pages. */
+html, body { min-width: 0; }
+body {
+  color: var(--th-text);
+  font-family: 'Twilio Sans Text', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  background: radial-gradient(ellipse at 50% 52%, #172745 0%, #000D25 65%);
+}
+.gallery-visually-hidden {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+}
+.scene { --thumb-size: clamp(54px, 7vh, 84px); }
+.scene > .site-nav { flex-shrink: 0; margin-bottom: 16px; }
+html.combo-embedded .site-nav,
+.scene.fs-active > .site-nav,
+:fullscreen .site-nav,
+:-webkit-full-screen .site-nav { display: none; }
+
+/* Gallery context sits below the shared navigation without forming a second
+   navigation bar. The event is always visible; display actions live together. */
+.top-bar {
+  padding: 11px clamp(16px, 2.5vw, 36px) 0;
+  min-height: 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+.top-bar-row {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center; gap: clamp(14px, 2.4vw, 32px);
+  width: 100%; max-width: 1360px; min-height: 42px; margin: 0 auto;
+}
+.gallery-brand {
+  display: inline-flex; align-items: center; gap: 10px; min-width: max-content;
+  color: #fff; text-decoration: none;
+  font-family: 'Twilio Sans Display', sans-serif; font-size: 17px;
+  letter-spacing: -.02em;
+}
+.gallery-brand img { width: 30px; height: 30px; }
+.gallery-brand strong { font-weight: 800; }
+.gallery-context-title {
+  color: var(--th-text); font: 800 20px/1.2 'Twilio Sans Display', sans-serif;
+  letter-spacing: -.02em;
+  white-space: nowrap;
+}
+.left-controls, .top-controls {
+  position: static; display: flex; align-items: center; gap: 8px;
+}
+.left-controls { justify-content: flex-start; min-width: 0; }
+.top-controls { justify-content: flex-end; min-width: max-content; }
+.event-label {
+  color: #BABECC; font: 700 12px/1.2 'Twilio Sans Text', sans-serif;
+  white-space: nowrap;
+}
+.ev-sel, .top-btn, .ctrl-btn, .page-nav button, .ab-btn, .ab-move-sel {
+  min-height: 36px; border-radius: 8px;
+  font-family: 'Twilio Sans Text', sans-serif;
+  font-style: normal; font-size: 12px; font-weight: 700;
+}
+.ev-sel {
+  width: min(240px, 100%); max-width: none; min-width: 0;
+  padding: 7px 32px 7px 12px;
+  border-color: rgba(255,255,255,.18); background-color: rgba(255,255,255,.08);
+  color: #fff;
+}
+.ev-sel:hover { color: #fff; background-color: rgba(255,255,255,.12); }
+.ev-sel option { background: #191F36; color: #fff; }
+.top-btn, .ctrl-btn {
+  flex-shrink: 0; padding: 7px 11px;
+  border-color: rgba(255,255,255,.16); background: transparent;
+  color: #DDE0E6; white-space: nowrap;
+}
+.top-btn:hover, .ctrl-btn:hover {
+  color: #fff; background: rgba(255,255,255,.10);
+  border-color: rgba(255,255,255,.26);
+}
+.top-btn.manage-active { color: #fff; background: #B10F23; border-color: #EF223A; }
+.top-btn svg, .ctrl-btn svg { width: 16px; height: 16px; }
+#manageBtn { color: #fff; border-color: rgba(239,34,58,.45); background: rgba(239,34,58,.14); }
+#manageBtn:hover { border-color: #EF223A; background: rgba(239,34,58,.24); }
+#manageBtn.manage-active { background: #B10F23; border-color: #EF223A; }
+.display-menu { position: relative; flex-shrink: 0; }
+.display-menu summary { list-style: none; }
+.display-menu summary::-webkit-details-marker { display: none; }
+.display-trigger { min-height: 38px; }
+.display-trigger .display-chevron {
+  width: 6px; height: 6px; margin: -3px 0 0 3px;
+  border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor;
+  transform: rotate(45deg);
+}
+.display-menu[open] .display-trigger { color: #fff; background: #232B45; border-color: #7E869C; }
+.display-menu[open] .display-chevron { margin-top: 3px; transform: rotate(225deg); }
+.display-menu:not([open]) .display-menu-panel { display: none; }
+.display-menu-panel {
+  position: absolute; top: calc(100% + 8px); right: 0; z-index: 10;
+  display: grid; gap: 2px; width: 204px; padding: 6px;
+  border: 1px solid #4D5777; border-radius: 10px;
+  background: #191F36; box-shadow: 0 16px 32px rgba(0,0,0,.35);
+}
+.display-menu-panel .top-btn {
+  width: 100%; min-height: 40px; justify-content: flex-start;
+  padding: 9px 10px; border: 0; background: transparent;
+  color: #DDE0E6; text-align: left; white-space: nowrap;
+}
+.display-menu-panel .top-btn:hover { color: #fff; background: #38425E; }
+.count-label {
+  display: flex; align-items: baseline; justify-content: center; gap: .52em;
+  margin: 0; padding: clamp(10px,1.7vh,19px) 16px 0;
+  color: #BABECC; font-family: 'Twilio Sans Text', sans-serif;
+  font-size: clamp(14px, 1.15vw, 18px); font-style: normal; font-weight: 400;
+  letter-spacing: 0; line-height: 1.2;
+}
+.count-label strong {
+  color: #fff; font-size: clamp(26px, 2.25vw, 40px); letter-spacing: -.035em;
+}
+.count-label.bump strong { animation: cBump .6s cubic-bezier(.36,.07,.19,.97); }
+.scene.admin-gallery .count-label {
+  flex-shrink: 0; padding: clamp(15px,2vh,22px) 16px 12px;
+}
+
+/* The public display keeps its original book sizing. In the admin workspace,
+   reserve room for the cover's overhang and size to the remaining stage. */
+.book-area { padding-top: clamp(8px, 1vh, 16px); }
+.scene.admin-gallery .book-area { align-items: stretch; padding-top: 20px; padding-bottom: 24px; }
+.scene.admin-gallery .book-wrap { align-self: stretch; height: auto; max-height: 60vh; min-height: 0; }
+.book-cover {
+  background: linear-gradient(160deg, #192B4C 0%, #101D38 52%, #08132B 100%);
+  border: 1px solid rgba(255,255,255,.12);
+}
+.book-cover::after { border-left-color: rgba(239,34,58,.25); border-right-color: rgba(239,34,58,.25); }
+.page { background: linear-gradient(to right, #EDEFF2 0%, #F8F9FA 8%, #fff 100%); }
+/* Native spread when a third-party page-turn script cannot load. */
+.book-fallback { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); overflow: hidden; }
+.book-fallback .page { display: none; position: relative !important; width: 100% !important; height: 100% !important; transform: none !important; }
+.book-fallback .page.fallback-visible { display: block; }
+.page-num { color: #4D5777; font-family: Georgia, serif; }
+.style-tag { color: #4D5777; }
+.flip-btn { color: #B10F23; border-color: #FFA6B1; background: #FFF1F3; }
+.flip-btn:hover, .flip-btn.active { color: #880B19; border-color: #EF223A; background: #FFD6DB; }
+.arrow {
+  background: #191F36; border: 1px solid #4D5777; color: #DDE0E6;
+  box-shadow: 0 4px 14px rgba(0,0,0,.18);
+}
+.arrow:hover { background: #232B45; border-color: #7E869C; color: #fff; }
+.empty-msg { color: #BABECC; font-family: 'Twilio Sans Text', sans-serif; font-style: normal; }
+
+/* Public signage keeps its existing filmstrip. Admin browsing uses one compact
+   footer with a labeled preview rail and an attached batch pager. */
+.filmstrip-title, .thumb-scroll { display: none; }
+.bottom-bar.visible {
+  padding-top: 9px; background: rgba(8, 12, 24, .86);
+  border-top: 1px solid rgba(255,255,255,.10);
+}
+.controls { margin-bottom: 6px; }
+.ctrl-btn { min-height: 32px; color: #DDE0E6; }
+.ctrl-btn.active { color: #fff; border-color: rgba(239,34,58,.45); background: rgba(239,34,58,.16); }
+.thumbs-bar { padding: 4px 0 12px; }
+.thumbs { gap: 10px; padding: 2px clamp(16px, 3vw, 40px) 7px; scrollbar-width: thin; }
+.thumbs::-webkit-scrollbar { display: block; height: 4px; }
+.thumb {
+  border: 2px solid transparent; border-radius: 7px;
+  background: #fff; padding: 3px; opacity: .64;
+  box-shadow: none; transform: none;
+}
+.thumb:hover { opacity: 1; transform: none; border-color: #9AA0B4; }
+.thumb.active {
+  opacity: 1; transform: none; border-color: #EF223A;
+  box-shadow: 0 0 0 2px rgba(239,34,58,.20);
+}
+.thumb img { border-radius: 3px; }
+.scene.admin-gallery .bottom-bar.visible {
+  padding: 8px clamp(16px, 3vw, 40px) 0;
+  background: #080C18;
+}
+.scene.admin-gallery .controls {
+  align-items: center; justify-content: space-between;
+  min-height: 30px; margin-bottom: 6px;
+}
+.scene.admin-gallery .filmstrip-title {
+  display: inline-block; color: #DDE0E6;
+  font: 700 12px/1.2 'Twilio Sans Text', sans-serif;
+}
+.scene.admin-gallery .ctrl-btn {
+  min-height: 29px; padding: 5px 9px;
+  border-color: #38425E; background: transparent;
+  color: #BABECC; font-size: 11px;
+}
+.scene.admin-gallery .ctrl-btn.active { color: #DDE0E6; background: #191F36; }
+.scene.admin-gallery .thumbs-bar {
+  display: grid; grid-template-columns: 30px minmax(0, 1fr) 30px;
+  align-items: center; gap: 8px; padding: 0 0 9px;
+}
+.scene.admin-gallery .thumbs {
+  min-width: 0; gap: 8px; padding: 3px 2px 5px;
+  scrollbar-width: none; scroll-snap-type: x proximity;
+}
+.scene.admin-gallery .thumbs::-webkit-scrollbar { display: none; }
+.scene.admin-gallery .thumb {
+  border: 1px solid #4D5777; border-radius: 6px;
+  padding: 2px; background: #fff; opacity: .78;
+  box-shadow: none; scroll-snap-align: center;
+}
+.scene.admin-gallery .thumb:hover { opacity: 1; border-color: #9AA0B4; }
+.scene.admin-gallery .thumb.active {
+  opacity: 1; border-color: #EF223A;
+  box-shadow: 0 0 0 1px rgba(239,34,58,.36);
+}
+.scene.admin-gallery .thumb-scroll {
+  display: grid; place-items: center; width: 30px; height: 34px;
+  border: 1px solid #4D5777; border-radius: 7px;
+  background: #191F36; color: #DDE0E6; cursor: pointer;
+}
+.scene.admin-gallery .thumb-scroll:hover:not(:disabled) { background: #232B45; color: #fff; }
+.scene.admin-gallery .thumb-scroll:disabled { opacity: .34; cursor: default; }
+.scene.admin-gallery .thumb-scroll svg { width: 16px; height: 16px; }
+.page-nav {
+  display: none; flex-shrink: 0; align-items: center; justify-content: space-between;
+  gap: 12px; min-height: 52px; padding: 8px clamp(16px, 3vw, 40px);
+  background: rgba(0, 13, 37, .96); border-top: 1px solid rgba(255,255,255,.10);
+  font-family: 'Twilio Sans Text', sans-serif;
+}
+.page-nav.visible { display: flex; }
+.page-range { color: #DDE0E6; font-size: 12px; }
+.page-nav-actions { display: flex; gap: 7px; align-items: center; }
+.page-nav-actions[hidden], .page-nav button[hidden] { display: none; }
+.page-nav button {
+  padding: 7px 12px; border: 1px solid #4D5777;
+  background: #191F36; color: #fff; cursor: pointer;
+}
+.page-nav button:hover:not(:disabled) { background: #232B45; border-color: #7E869C; }
+.page-nav button:disabled { opacity: .36; cursor: default; }
+.page-nav #newestBatchBtn { border-color: #EF223A; background: #B10F23; }
+.page-nav #newestBatchBtn:hover { background: #EF223A; }
+.scene.admin-gallery .page-nav.visible {
+  min-height: 0; padding: 7px clamp(16px, 3vw, 40px) 10px;
+  background: #080C18; border-top-color: rgba(255,255,255,.08);
+}
+.scene.admin-gallery .page-range { color: #BABECC; }
+.scene.admin-gallery .page-nav button { min-height: 33px; }
+.scene.admin-gallery .page-nav #newestBatchBtn {
+  border-color: #4D5777; background: #191F36;
+}
+.scene.admin-gallery .page-nav #newestBatchBtn:hover { background: #232B45; }
+.scene.admin-gallery .page-nav #newestBatchBtn.has-new {
+  border-color: #EF223A; background: #B10F23;
+}
+.scene.admin-gallery .page-nav #newestBatchBtn.has-new:hover { background: #EF223A; }
+
+/* Management uses a contact-sheet rhythm rather than tiny floating tiles. */
+.manage-grid { padding: 0 clamp(16px,3vw,40px) 24px; background: var(--th-bg); }
+.manage-header { display: flex; align-items: baseline; justify-content: space-between; gap: 20px; padding: 22px 0 17px; }
+.manage-header h2 { font-family: 'Twilio Sans Display', sans-serif; font-size: clamp(20px,2vw,28px); color: var(--th-text); }
+.manage-header p { font: 12px/1.45 'Twilio Sans Text', sans-serif; color: var(--th-text-dim); }
+.manage-grid-inner { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 14px; }
+.mg-card {
+  display: block; width: 100%; padding: 0; text-align: left;
+  background: var(--th-card); color: var(--th-text);
+  border: 1px solid var(--th-card-border); border-radius: 10px;
+  box-shadow: none; transition: border-color .15s, transform .15s;
+}
+.mg-card:hover { border-color: var(--th-text-muted); transform: translateY(-2px); }
+.mg-card.selected { border: 2px solid #EF223A; }
+.mg-card img { aspect-ratio: 4/5; object-fit: contain; background: #fff; }
+.mg-card .mg-label { padding: 10px 11px 5px; font-size: 11px; font-weight: 700; color: var(--th-text); }
+.mg-type-row { padding: 0 11px 10px; }
+.mg-type-tag { font-family: 'Twilio Sans Text', sans-serif; font-size: 10px; text-transform: none; border-radius: 4px; }
+.mg-type-tag.ai { color: #A5EBFF; background: rgba(33,136,239,.18); }
+.mg-type-tag.selfie { color: #FFA6B1; background: rgba(239,34,58,.18); }
+.mg-card .mg-check { width: 24px; height: 24px; border-color: rgba(255,255,255,.85); }
+.scene.manage-mode .page-nav { margin-bottom: 74px; }
+.action-bar { background: rgba(8,12,24,.97); border-top-color: var(--th-card-border); }
+.action-bar .ab-count { color: #DDE0E6; }
+.ab-btn { color: #fff; border-color: #4D5777; }
+.ab-btn:hover { color: #fff; }
+.ab-move-sel { color: #fff; border-color: #4D5777; }
+.terms-notice { color: #9AA0B4; }
+
+html[data-theme="light"] body { background: radial-gradient(ellipse at 50% 50%, #F5F7FC 0%, #fff 70%); }
+html[data-theme="light"] .page-nav { background: rgba(255,255,255,.96); border-color: #DDE0E6; }
+html[data-theme="light"] .gallery-brand { color: #000D25; }
+html[data-theme="light"] .event-label { color: #4D5777; }
+html[data-theme="light"] .ev-sel,
+html[data-theme="light"] .top-btn { color: #232B45; background-color: #fff; border-color: #BABECC; }
+html[data-theme="light"] .ev-sel:hover,
+html[data-theme="light"] .top-btn:hover { color: #000D25; background-color: #F3F4F7; }
+html[data-theme="light"] #manageBtn { color: #880B19; background: #FFF1F3; border-color: #FFA6B1; }
+html[data-theme="light"] #manageBtn:hover { background: #FFD6DB; border-color: #EF223A; }
+html[data-theme="light"] #manageBtn.manage-active { color: #fff; background: #B10F23; border-color: #B10F23; }
+html[data-theme="light"] .display-menu[open] .display-trigger { background: #F3F4F7; border-color: #7E869C; }
+html[data-theme="light"] .display-menu-panel {
+  background: #fff; border-color: #BABECC; box-shadow: 0 16px 32px rgba(0,13,37,.18);
+}
+html[data-theme="light"] .display-menu-panel .top-btn { color: #232B45; background: transparent; border: 0; }
+html[data-theme="light"] .display-menu-panel .top-btn:hover { color: #000D25; background: #F3F4F7; }
+html[data-theme="light"] .ev-sel option { color: #000D25; background: #fff; }
+html[data-theme="light"] .count-label { color: #4D5777; }
+html[data-theme="light"] .count-label strong { color: #000D25; }
+html[data-theme="light"] .bottom-bar.visible { background: rgba(243,244,247,.94); border-color: #DDE0E6; }
+html[data-theme="light"] .scene.admin-gallery .bottom-bar.visible,
+html[data-theme="light"] .scene.admin-gallery .page-nav.visible { background: #F3F4F7; border-color: #DDE0E6; }
+html[data-theme="light"] .scene.admin-gallery .filmstrip-title { color: #232B45; }
+html[data-theme="light"] .scene.admin-gallery .ctrl-btn,
+html[data-theme="light"] .scene.admin-gallery .thumb-scroll { color: #38425E; background: #fff; border-color: #BABECC; }
+html[data-theme="light"] .scene.admin-gallery .ctrl-btn.active { color: #232B45; background: #fff; }
+html[data-theme="light"] .scene.admin-gallery .thumb-scroll:hover:not(:disabled) { color: #000D25; background: #E8EAEF; }
+html[data-theme="light"] .scene.admin-gallery .page-range { color: #4D5777; }
+html[data-theme="light"] .page-range { color: #38425E; }
+html[data-theme="light"] .page-nav button { color: #232B45; background: #fff; border-color: #BABECC; }
+html[data-theme="light"] .page-nav button:hover:not(:disabled) { color: #000D25; background: #F3F4F7; }
+html[data-theme="light"] .page-nav #newestBatchBtn { color: #fff; background: #B10F23; border-color: #B10F23; }
+html[data-theme="light"] .page-nav #newestBatchBtn:hover { color: #fff; background: #EF223A; }
+html[data-theme="light"] .scene.admin-gallery .page-nav #newestBatchBtn {
+  color: #232B45; background: #fff; border-color: #BABECC;
+}
+html[data-theme="light"] .scene.admin-gallery .page-nav #newestBatchBtn:hover { color: #000D25; background: #E8EAEF; }
+html[data-theme="light"] .scene.admin-gallery .page-nav #newestBatchBtn.has-new {
+  color: #fff; background: #B10F23; border-color: #B10F23;
+}
+html[data-theme="light"] .scene.admin-gallery .page-nav #newestBatchBtn.has-new:hover { color: #fff; background: #EF223A; }
+html[data-theme="light"] .mg-type-tag.ai { color: #0E3E92; background: #E4F7FF; }
+html[data-theme="light"] .mg-type-tag.selfie { color: #880B19; background: #FFF1F3; }
+html[data-theme="light"] .action-bar { background: rgba(255,255,255,.97); }
+html[data-theme="light"] .action-bar .ab-count { color: #38425E; }
+
+.gallery-brand:focus-visible, .ev-sel:focus-visible, .top-btn:focus-visible,
+.display-trigger:focus-visible,
+.ctrl-btn:focus-visible, .arrow:focus-visible, .thumb:focus-visible,
+.thumb-scroll:focus-visible,
+.page-nav button:focus-visible, .mg-card:focus-visible, .ab-btn:focus-visible,
+.flip-btn:focus-visible {
+  outline: 3px solid #19ABF3; outline-offset: 2px;
+}
+
+@media (max-width: 1050px) {
+  .gallery-brand span { display: none; }
+  .top-bar-row { gap: 12px; }
+}
+@media (orientation: portrait) {
+  .scene.admin-gallery .count-label {
+    margin: 0; padding: 14px 16px 12px;
+    font-size: clamp(14px, 1.5vw, 18px); line-height: 1.2;
+  }
+  .scene.admin-gallery .count-label strong { font-size: clamp(26px, 3vw, 40px); }
+}
+@media (max-width: 960px) {
+  .top-bar-row { grid-template-columns: minmax(0, 1fr) auto; }
+  .gallery-brand, .gallery-context-title { grid-column: 1; grid-row: 1; }
+  .top-controls { grid-column: 2; grid-row: 1; }
+  .left-controls { grid-column: 1 / -1; grid-row: 2; }
+}
+@media (max-width: 700px) {
+  .top-bar { padding: 10px 14px 0; }
+  .top-bar-row { gap: 9px 8px; min-height: 0; }
+  .gallery-context-title { font-size: 17px; }
+  .top-controls { gap: 6px; }
+  .top-controls > .top-btn, .display-trigger { padding: 7px 9px; }
+  .left-controls { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; width: 100%; }
+  .ev-sel { width: 100%; }
+  .share-btn { justify-content: center; }
+  .count-label { padding: 9px 12px 0; font-size: 13px; }
+  .count-label strong { font-size: 28px; }
+  .book-area { padding: 7px 30px; }
+  .scene.admin-gallery .book-area { padding: 20px 30px 24px; }
+  .book-wrap, html:not(.combo-embedded) .book-wrap { width: 100%; height: min(52vh, 490px); }
+  .scene.admin-gallery .book-wrap { height: auto; max-height: min(52vh, 490px); }
+  .arrow { width: 36px; height: 36px; }
+  .arrow.left { left: 3px; } .arrow.right { right: 3px; }
+  .arrow svg { width: 18px; height: 18px; }
+  .page-nav { padding: 8px 14px; }
+  .scene.admin-gallery .bottom-bar.visible { padding-inline: 14px; }
+  .scene.admin-gallery .page-nav.visible {
+    flex-wrap: wrap; gap: 7px; padding: 8px 14px 10px;
+  }
+  .scene.admin-gallery .page-range { width: 100%; }
+  .scene.admin-gallery .page-nav-actions { width: 100%; justify-content: flex-end; flex-wrap: wrap; }
+  .scene.admin-gallery .thumbs-bar { grid-template-columns: 28px minmax(0, 1fr) 28px; gap: 6px; }
+  .scene.admin-gallery .thumb-scroll { width: 28px; height: 32px; }
+  .page-range { font-size: 11px; }
+  .page-nav button { padding: 6px 8px; font-size: 11px; }
+  .manage-header { display: block; padding: 16px 0 12px; }
+  .manage-header p { margin-top: 5px; }
+  .manage-grid-inner { grid-template-columns: repeat(auto-fill, minmax(125px, 1fr)); gap: 9px; }
+  .action-bar { flex-wrap: wrap; gap: 7px; padding: 9px 12px; }
+  .action-bar .ab-count { flex-basis: 100%; }
+  .scene.manage-mode .page-nav { margin-bottom: 108px; }
+}
+@media (max-width: 700px) and (orientation: portrait) {
+  html:not(.combo-embedded) .count-label { margin: 0; padding: 9px 12px 0; font-size: 13px; line-height: 1.2; }
+  html:not(.combo-embedded) .count-label strong { font-size: 28px; }
+  html:not(.combo-embedded) .book-wrap { width: 100%; height: min(52vh, 490px); }
+  html:not(.combo-embedded) .thumbs { gap: 8px; padding-inline: 12px; }
+  html:not(.combo-embedded) .thumbs-bar { padding-bottom: 8px; }
+}
+@media (max-height: 640px) {
+  .count-label { padding-top: 5px; }
+  .book-wrap { height: 48vh; }
+  .scene.admin-gallery .book-wrap { height: auto; max-height: 48vh; }
+  .thumbs-bar { padding-bottom: 5px; }
+}
+@media (max-height: 640px) and (max-width: 700px) {
+  .book-wrap, html:not(.combo-embedded) .book-wrap { height: min(39vh, 250px); }
+  .scene.admin-gallery .book-wrap { height: auto; max-height: min(39vh, 250px); }
+  .scene { --thumb-size: 50px; }
+  .thumbs-bar { padding-top: 0; }
+}
+@media (max-width: 400px) {
+  .top-controls > #manageBtn svg, .display-trigger > svg { display: none; }
+  .top-controls > .top-btn, .display-trigger { padding-inline: 8px; }
+}
+/* Short admin phone screens need a full-width readable book. Let the page grow
+   vertically instead of shrinking the stage to make room for the footer. */
+@media (max-width: 480px) and (max-height: 700px) and (orientation: portrait) {
+  html.gallery-admin-page, html.gallery-admin-page body {
+    height: auto; overflow-x: hidden; overflow-y: auto;
+  }
+  .scene.admin-gallery:not(.manage-mode) { height: auto; min-height: 100vh; }
+  .scene.admin-gallery:not(.manage-mode) .book-area {
+    flex-shrink: 0; min-height: calc(66.667vw + 36px);
+    padding: 20px 12px 24px;
+  }
+  .scene.admin-gallery:not(.manage-mode) .book-wrap {
+    max-height: none;
+    /* The cover extends 6px left and 18px right of the pages. */
+    transform: translateX(-6px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
+}

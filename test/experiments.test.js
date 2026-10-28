@@ -243,8 +243,8 @@ test("GET / returns the experiments landing page HTML", async () => {
         });
     });
     assert.equal(status, 200);
-    assert.match(body, /Prompt Experiments/);
-    assert.match(body, /New experiment/);
+    assert.match(body, /Prompt runs/);
+    assert.match(body, /New run/);
 });
 
 test("GET /new renders the form", async () => {
