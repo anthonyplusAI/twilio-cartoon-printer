@@ -833,6 +833,7 @@ test("a stale settings POST waits for rename and cannot restore removed frame st
         });
         await copyStartedPromise;
         const staleSave = request(server, "POST", "/dashboard/api/settings", {
+            _forEvent: "active",
             templateFile: "old.png",
             templateFilesByOrientation: { portrait: "old.png", landscape: "missing.png" },
             templateCompatibilityOverrides: { "old.png": "both", "missing.png": "landscape" },
@@ -1023,9 +1024,9 @@ test("audit revert excludes frame-library globals and sanitizes stale references
     assert.deepEqual(result, { maxPrints: 2, templateFile: "new.png" });
 });
 
-test("home UI renders an orientation-independent manager and a compatible-only output selector", () => {
-    const { buildHomeHtml } = require("../lib/home");
-    const html = buildHomeHtml();
+test("settings UI renders an orientation-independent manager and a compatible-only output selector", () => {
+    const { buildSettingsHtml } = require("../lib/home");
+    const html = buildSettingsHtml();
     assert.match(html, /id="frameManager"/);
     assert.match(html, />Native<\/option>/);
     assert.match(html, />Portrait<\/option>/);

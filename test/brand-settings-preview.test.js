@@ -1,10 +1,10 @@
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
 const vm = require("node:vm");
-const { buildHomeHtml } = require("../lib/home");
+const { buildSettingsHtml } = require("../lib/home");
 
 function renderPreview(offerUnbranded, brands) {
-    const html = buildHomeHtml();
+    const html = buildSettingsHtml();
     const script = [...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)]
         .map((match) => match[1])
         .find((body) => body.includes("function renderBrandMessagesPreview()"));
@@ -29,7 +29,8 @@ function renderPreview(offerUnbranded, brands) {
         },
     };
     vm.createContext(context);
-    vm.runInContext(script, context);
+    // The settings page bootstraps browser-only navigation after these helpers.
+    vm.runInContext(script.split("document.getElementById('themeLabel').textContent =")[0], context);
     context._customBrands = brands;
     context._disabledBrands = [];
     context._offerUnbranded = offerUnbranded;

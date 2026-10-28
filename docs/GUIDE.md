@@ -78,7 +78,7 @@ This document covers all features and configuration in depth. For quick setup, s
 | `PICKUP_LOCATION` | No | Name shown in physical print pickup messages. Runtime setting overrides this value; blank uses `Twilio booth` in English or `estande da Twilio` in Portuguese. |
 | `CUSTOM_PRINT_FLAGS` | No | Additional raw flags appended to the `lp` command. For non-Epson printers or advanced CUPS options (e.g. `-o MediaType=Glossy`). |
 | `PROMO_MESSAGE` | No | Promotional message sent as a standalone SMS after each portrait delivery. Leave blank to disable. |
-| `PRINT_RELAY_KEY` | No | Shared secret for the print relay agent. Set this to enable cloud-to-local printing. See [Print Relay](#print-relay-cloud-printing). |
+| `PRINT_RELAY_KEY` | No | Shared secret for the print relay agent. Set it in deployment configuration (or local `.env`) to enable cloud-to-local printing; it cannot be entered in the Settings page. See [Print Relay](#print-relay-cloud-printing). |
 | `PRINT_RELAY_URL` | No | Cloud app URL for the relay agent (used by the local script only, not the server). |
 | `PRINT_RELAY_PRINTER` | No | Override printer name for the relay agent (default: auto-detect). |
 | `PRINT_RELAY_PRINTERS` | No | Comma-separated list of printer names for multi-printer relay (e.g. `EPSON_1,EPSON_2`). Overrides `PRINT_RELAY_PRINTER`. |
@@ -129,7 +129,7 @@ Security notes:
 
 ## Template Frames
 
-Place your template PNGs in the `templates/` folder. Set `TEMPLATE_FILE` in `.env` to the filename you want to use (e.g. `signal_sf.png`). You can also change the template at runtime from the Settings panel on the home page under **Styles & Art**, and upload new templates directly through the UI.
+Place your template PNGs in the `templates/` folder. Set `TEMPLATE_FILE` in `.env` to the filename you want to use (e.g. `signal_sf.png`). You can also change the template at runtime from `/home/settings` under **Portrait** > **Styles & Art**, and upload new templates directly through the UI.
 
 Templates should be PNGs with **transparent areas** where the generated portrait shows through. The opaque areas form the frame border (branding, logos, CTA, etc.). The template is composited on top of the portrait at the configured output dimensions.
 
@@ -177,12 +177,14 @@ Current mounted routes:
 | Route | Access | Purpose |
 |---|---|---|
 | `/` | Admin | Redirects to `/home` |
-| `/home` | Admin | Settings, booth display launcher, video/static/combo/break screens |
+| `/home` | Admin | Operator home, event status, booth display launcher, and links to tools |
+| `/home/settings` | Admin | Event, portrait, delivery, booth display, messaging, and advanced settings |
 | `/dashboard` | Admin | Monitoring, review, retry/reprint, printer controls, reports |
 | `/outreach` | Admin | Broadcasts, raffles, lead reports, drop-off nudges |
 | `/photogallery` | Public GET, admin mutations | Public booth photo book and admin photo actions |
 | `/s/:filePrefix` | Public | Share page for delivered portraits |
 | `/review/*` | Public token/PIN flow | Mobile review flow for approved reviewers |
+| `/review/settings` | Review or admin session | Review settings, including Review PIN replacement/removal |
 | `/api/generate` | Admin/API | Programmatic generation endpoint used by kiosk/API clients |
 | `/kiosk` | Admin/API | Browser kiosk submission UI with SMS/WhatsApp portrait delivery |
 | `/eval` | Admin | Prompt experiments and evaluation tools |
@@ -194,30 +196,24 @@ The kiosk offers the delivery channels enabled for the active event. WhatsApp ap
 
 ### Home Page
 
-The home page at `/home` is the admin console for booth operators. It provides three action cards:
+The home page at `/home` is the operator hub. It shows the current event and its queue, delivery, review, and guest-entry status. The booth display card launches `/home/combo` and links to QR instructions, video when configured, and the camera kiosk. Quick links open Dashboard, Gallery, Outreach, and the separate Settings page at `/home/settings`.
 
-- **Launch Booth Display** -- navigates normally to the booth display without opening a popup or forcing fullscreen. Landscape displays remain side by side; portrait displays stack the intro/QR panel above the photo book. The divider is draggable on either axis. An expandable "Open individually" section provides direct links to each view.
-- **Open Dashboard** -- links to the admin dashboard for monitoring and management
-- **Outreach** -- links to the dedicated outreach page for broadcast messaging, raffles, and lead capture reports
-
-The home page also includes a collapsible **Settings** panel where admins can configure all app settings at runtime without editing `.env` or restarting the server. See [Runtime Settings](#runtime-settings) for details.
-
-A **How It Works** section shows the 6-step flow from setup through attendee engagement.
+The **How this event runs** section summarizes the guest entry, review, and delivery flow for the active event. See [Runtime Settings](#runtime-settings) for configuration details.
 
 ### Get Started Video
 
 The intro video at `/home/video` is a fullscreen looping video player designed to run on a booth display monitor to attract attendees and show them how the photobooth works.
 
-- Upload your video from the Settings panel, which stores it in `booth-uploads/` so it persists across cloud restarts
+- Upload your video from `/home/settings` > **Booth display**, which stores it in `booth-uploads/` so it persists across cloud restarts
 - Set `VIDEO_FILE` in `.env` to the filename (defaults to `get-started.mp4`)
 - The video autoplays on loop with floating BRB, Pause/Play, and Fullscreen buttons
-- To switch videos, change the setting from the Settings panel on `/home` or update `.env`
+- To switch videos, change the setting in `/home/settings` > **Booth display** or update `.env`
 
 ### Static Instruction Page
 
 The static page at `/home/panel` is a branded instruction panel designed for booth monitors. It displays a QR code, numbered steps, and configurable text -- all with Twilio typography (Display Extrabold headlines, Text body copy, Mono step numbers) and draft line accents.
 
-Configure from the Settings panel under **Booth Display** when the display mode is set to "Static Page":
+Configure from `/home/settings` > **Booth display** when the display mode is set to "Static Page":
 
 - **Headline** -- large text at the top (e.g. "Get Your AI Portrait")
 - **Subline** -- smaller text below the headline (e.g. event name)
@@ -231,7 +227,7 @@ The page includes BRB and Fullscreen buttons. When no QR code is uploaded, a pla
 
 The booth display at `/home/combo` is responsive to monitor orientation and opens as a normal page without a popup or fullscreen prompt. Landscape screens retain the original side-by-side layout. Portrait screens place the content pane above the photo book. Theme changes synchronize across both panes in either orientation, and the divider is draggable horizontally or vertically to resize the panes.
 
-The **Display Mode** setting (under Booth Display in the Settings panel) controls what shows on the left side:
+The **Display Mode** setting under **Booth display** at `/home/settings` controls what shows on the left side:
 
 | Mode | Left pane | Right pane | Use case |
 |------|-----------|------------|----------|
@@ -323,7 +319,7 @@ The bot also responds conversationally when users send text-only messages with q
 
 Art styles can be managed in two ways:
 
-**From the Settings panel** (no code changes): Open the Settings panel on `/home`, scroll to the **Styles & Art** section. You can toggle built-in styles on/off, edit their prompts (with a reset button to revert to the original), add custom styles with a name and prompt, and edit custom style names and prompts after creation. You can also choose which style is used as the default when a user doesn't specify one, and import style prompt overrides from another event. All customizations are stored in `data/settings.json`.
+**From Settings** (no code changes): Open `/home/settings` > **Portrait** > **Styles & Art**. You can toggle built-in styles on/off, edit their prompts (with a reset button to revert to the original), add custom styles with a name and prompt, and edit custom style names and prompts after creation. You can also choose which style is used as the default when a user doesn't specify one, and import style prompt overrides from another event. Click **Save changes** to apply edits; customizations are stored in `data/settings.json` and the active event profile.
 
 **In code**: Built-in styles are defined in `lib/styles.js`. Each style has a keyword, display name, and an LLM prompt. To add a new built-in style, add an entry to the `STYLES` object:
 
@@ -340,11 +336,11 @@ Styles automatically appear in SMS messages and are available for users to selec
 
 By default, **Multi-Subject Photos** is set to reject group photos. If scene analysis detects more than one primary human subject, the app sends the configurable `multiSubjectReject` message and refunds the user's usage count.
 
-Change the Multi-Subject Photos mode from **Styles & Art** when an event should allow multiple people in one portrait. Scene analysis still counts the primary subjects and pets so the prompt can preserve the intended subject count.
+Change the Multi-Subject Photos mode from **Portrait** > **Styles & Art** when an event should allow multiple people in one portrait. Scene analysis still counts the primary subjects and pets so the prompt can preserve the intended subject count.
 
 ## Branding
 
-Branding controls how the AI renders clothing, logos, and visual themes across all art styles. The Branding section in the Settings panel has two modes, toggled by the **Let Users Choose Brand** switch.
+Branding controls how the AI renders clothing, logos, and visual themes across all art styles. The **Branding** group in `/home/settings` > **Portrait** has two modes, toggled by the **Let Users Choose Brand** switch.
 
 ### Single Brand Mode
 
@@ -353,7 +349,7 @@ When the brand selection toggle is OFF, all portraits use a single brand configu
 - **Brand Prompt** -- a global modifier appended to every art style's AI prompt (e.g. "wearing a bright red Twilio t-shirt with the Twilio logo clearly visible"). Applied to all subjects in multi-person photos.
 - **Brand Reference Images** -- uploaded images that show the AI what the branded items look like (jerseys, logos, gear). Stored in a shared library; each event selects which images to use via checkboxes.
 
-Configure from the Settings panel under **Branding**. Leave the brand prompt blank to disable. Can also be set via the `BRAND_PROMPT` environment variable.
+Configure from `/home/settings` > **Portrait** > **Branding**. Leave the brand prompt blank to disable. Can also be set via the `BRAND_PROMPT` environment variable.
 
 ### Multi-Brand Selection
 
@@ -379,7 +375,7 @@ Brand reference images are stored in the `brand-references/` folder. Uploading a
 
 ## Background Selection
 
-The app includes a configurable background system for AI-generated portraits. By default, a background instruction is appended to every generation prompt that tells the AI to recreate the original photo's background in the chosen art style. This default prompt is editable from the Settings panel under **Backgrounds**.
+The app includes a configurable background system for AI-generated portraits. By default, a background instruction is appended to every generation prompt that tells the AI to recreate the original photo's background in the chosen art style. This default prompt is editable in `/home/settings` > **Portrait** > **Backgrounds**.
 
 When **Enable Background Selection** is turned on, users get a numbered background menu via SMS after choosing their art style -- similar to the style selection menu. Admins configure the available background options (name + prompt) from the Settings panel. Each option tells the AI what background to render (e.g. "Solid White", "Original Scene", "City Skyline").
 
@@ -389,7 +385,7 @@ Background menu SMS messages (intro, footer, retry) are configurable under **Eng
 
 ## Review Modes
 
-Before a generated portrait reaches the user, it can pass through an optional review step. Configure **Review Mode** in the Settings panel under **Event & Operations**:
+Before a generated portrait reaches the user, it can pass through an optional review step. Configure **Review Mode** in `/home/settings` > **Delivery** > **Image Review**:
 
 | Mode | Behavior | When to use |
 |---|---|---|
@@ -411,11 +407,11 @@ Flipping review mode **off** while items sit in the queue does NOT auto-approve 
 
 ## Delivery Mode
 
-The app supports three delivery modes, configurable from the Settings panel under **Delivery & Display**:
+The app supports three delivery setups, configured in `/home/settings` > **Delivery**:
 
-- **Print + Digital (local)** -- Portraits are printed on a directly connected printer and sent to the user via MMS/share link. With immediate digital delivery enabled, delivery happens after generation while printing continues; otherwise it waits for print completion. Requires a CUPS printer on the server machine. Set `ENABLE_PRINTING=true` in `.env` or toggle in the Settings panel.
-- **Print + Digital (cloud relay)** -- The server runs in the cloud. A relay agent on the event laptop polls for print-ready jobs, downloads images, and prints locally. Enable printing and set a **Print Relay Key** in the Settings panel. See [Print Relay](#print-relay-cloud-printing) for full setup.
-- **Digital Only** -- Portraits are sent via MMS or share link immediately after AI generation. No printer required. Use this for demos, remote events, or setups without a physical printer. Set `ENABLE_PRINTING=false` and leave the Print Relay Key blank.
+- **Print + Digital (local)** -- Portraits are printed on a directly connected printer and sent to the user via MMS/share link. With immediate digital delivery enabled, delivery happens after generation while printing continues; otherwise it waits for print completion. Requires a CUPS printer on the server machine. Set `ENABLE_PRINTING=true` in `.env` or choose **Print + Digital** in Settings.
+- **Print + Digital (cloud relay)** -- The server runs in the cloud. A relay agent on the event laptop polls for print-ready jobs, downloads images, and prints locally. Choose **Print + Digital** in Settings and set `PRINT_RELAY_KEY` in deployment configuration. See [Print Relay](#print-relay-cloud-printing) for full setup.
+- **Digital Only** -- Portraits are sent via MMS or share link immediately after AI generation. No printer required. Use this for demos, remote events, or setups without a physical printer. Set `ENABLE_PRINTING=false` or choose **Digital Only** in Settings. An existing relay key can remain configured; printing still stays off.
 
 The delivery mode affects the SMS messages users receive (e.g. "head to the booth to pick up your print" vs "we'll text it to you").
 
@@ -466,7 +462,7 @@ Cloud App                              Event Laptop
 
 ### Setup -- Step 1: Cloud App
 
-Open the admin Settings panel. Under **Delivery & Display**, choose **Print + Digital** and enter a strong, unique **Print Relay Key** (for example, generate one with `openssl rand -hex 32`). Save settings.
+Open `/home/settings` on the cloud app. Under **Delivery**, choose **Print + Digital** and click **Save changes**. Generate a strong, unique key (for example, with `openssl rand -hex 32`) and set it as `PRINT_RELAY_KEY` in the cloud deployment configuration. For this repository's GitHub Actions deployment, update the `PRINT_RELAY_KEY` repository secret and run the deployment workflow. The Settings page shows only whether a relay key is configured; it cannot display or change the secret.
 
 The relay key enables and authenticates the relay API. Printing must also be enabled; otherwise generated jobs go straight to `done/` as digital-only jobs and the relay has nothing to claim.
 
@@ -486,7 +482,7 @@ npm start
 
 **In the app UI:**
 1. Click **Edit** next to **Cloud URL**, enter your cloud URL (e.g. `https://your-app.azurecontainerapps.io`), then lock it again if desired
-2. Click **Edit** next to **Relay Key**, enter the same key you set in the cloud app's Settings, then lock it again if desired
+2. Click **Edit** next to **Relay Key**, enter the same key configured as `PRINT_RELAY_KEY` in the cloud deployment, then lock it again if desired
 3. Select the **Event to Print**; the station will not connect without an explicit event
 4. Select one or more **Printers** from the checklist (or leave all unchecked for auto-detect)
 5. Click **Connect**
@@ -634,7 +630,7 @@ The app can collect attendee contact information via a short SMS survey. When en
 
 ### Modes
 
-Configure Lead Capture from the Settings panel on `/home`. Toggle it on to enable, then choose the timing:
+Configure Lead Capture from `/home/settings` > **Messaging**. Toggle it on to enable, then choose the timing:
 
 - **Before** -- Survey runs when a user first texts the app. If they sent a selfie, it's held and auto-enqueued after survey completion. If they texted without an image, they're prompted to send a selfie after finishing. On completion the user receives a brief thank-you and proceeds to the normal portrait flow.
 - **After** -- Normal flow proceeds (selfie, generation, printing). When the portrait is ready, the completion MMS is held back and the survey starts. After completion, the held portrait is delivered.
@@ -663,7 +659,7 @@ The page uses a two-column layout on desktop (user list on the left, actions on 
 
 ## Configurable SMS Messages
 
-Every SMS message the app sends to users is configurable from the Settings panel. Messages are organized into categories:
+Every SMS message the app sends to users is configurable from `/home/settings` > **Messaging**. Messages are organized into categories:
 
 - **Welcome & Onboarding** -- welcome text, quota counts, multiple photo warning
 - **Style Selection** -- menu intro, footer, retry on invalid input
@@ -689,7 +685,7 @@ Messages support `{variable}` interpolation for dynamic values. Available variab
 
 Lead capture survey fields (first name, last name, country, email, company, job title) can each be toggled on/off with custom prompts and error messages.
 
-For WhatsApp and other channels that require Twilio Content Templates, the Settings panel includes a **Content Templates** group. Enter an `HX...` Content SID for each message key that needs template delivery. If no Content SID is configured for a key, the app falls back to the plain-text body for that message. Media attachments are only sent for plain-body sends because Twilio Content Template sends are handled separately.
+For WhatsApp and other channels that require Twilio Content Templates, `/home/settings` > **Advanced** > **Twilio routing** includes a **Content Templates** group. Enter an `HX...` Content SID for each message key that needs template delivery. If no Content SID is configured for a key, the app falls back to the plain-text body for that message. Media attachments are only sent for plain-body sends because Twilio Content Template sends are handled separately.
 
 All message customizations are stored in `data/settings.json` and take effect immediately.
 
@@ -697,7 +693,7 @@ All message customizations are stored in `data/settings.json` and take effect im
 
 The app can send a Net Promoter Score survey after a user's final portrait (when their quota is exhausted). When enabled, the app waits a configurable delay (default 30 seconds) after the last delivery, then texts the user asking for a 1-5 rating.
 
-Configure from the Settings panel under **Engagement & Messages**:
+Configure from `/home/settings` > **Messaging**:
 
 - **Enable/Disable** toggle
 - **Delay** -- seconds to wait after delivery before sending the prompt (default 30)
@@ -739,13 +735,13 @@ When **SMS Share Page Only** is enabled, the delivery SMS sends only text with t
 
 ### Configuration
 
-Configure from the Settings panel under **Social Sharing**:
+Configure share behavior from `/home/settings` > **Messaging** > **Social Sharing**. The dub.co key, short domain, and folder ID are in **Advanced**:
 
 **Global settings (infrastructure):**
 
 | Setting | Env var | Default | Description |
 |---------|---------|---------|-------------|
-| dub.co API Key | `DUB_API_KEY` | *(empty)* | dub.co API key for URL shortening. Leave blank to skip shortening. |
+| dub.co API Key | `DUB_API_KEY` | *(empty)* | Set in the app environment for URL shortening. If no environment key is set, **Advanced** has a write-only replacement for a saved fallback key. Leave blank to skip shortening. |
 | Short Domain | `DUB_DOMAIN` | `twil.io` | Custom short domain configured in dub.co |
 | Folder ID | `DUB_FOLDER_ID` | *(empty)* | Optional dub.co folder ID for organizing links |
 
@@ -773,7 +769,7 @@ Configure from the Settings panel under **Social Sharing**:
 
 All three booth displays (intro video, combo, photo book) include a **BRB** button in the bottom toolbar. Clicking it shows a fullscreen "We'll Be Right Back" overlay with animated visuals, the event name, and an optional custom message. Click anywhere to dismiss.
 
-The break message is configurable from the Settings panel under **Event & Operations**. The standalone break screen is also available directly at `/home/break`.
+The break message is configurable from `/home/settings` > **Booth display** > **Photo Book & Gallery**. The standalone break screen is also available directly at `/home/break`.
 
 ## Promotional Messages
 
@@ -781,71 +777,66 @@ The app can send a promotional message as a standalone SMS after each portrait i
 
 The promo is sent after every portrait completion (including repeat users). Admins are excluded. If the promo message field is empty, no promo is sent.
 
-Configure the message from the Settings panel on the home page under **Engagement & Messages**. Set `PROMO_MESSAGE` in `.env` to configure a default, or leave blank to disable.
+Configure the message from `/home/settings` > **Messaging** > **Promotional**. Set `PROMO_MESSAGE` in `.env` to configure a default, or leave blank to disable.
 
 ## Runtime Settings
 
-The Settings panel on the home page (`/home`) lets admins change all app configuration at runtime without editing `.env` or restarting the server. Changes take effect immediately and are persisted to `data/settings.json`.
+Open the Settings page at `/home/settings` from Home. It lets admins change creative and operational settings at runtime. Click **Save changes** to apply edits; the page sends only changed fields. Saved values take effect immediately. Overrides persist to `data/settings.json`; per-event values also persist to the active event profile. The search field finds settings across the page.
 
-The settings panel is organized into eight sections:
+The navigation has six sections:
 
-**Event & Operations** -- Event Name (combo-box with existing events, saved-profile badges, or type a new name to create one -- selecting auto-saves and switches), Max Prints Per User, Admin Phone Numbers, Max Concurrent Generations, Queue Control (pause/resume), Manual Review toggle, Review PIN, Break Screen Message
+- **Event** -- Choose or create an event, then use **Switch event**; set attendee language, print limits, generation concurrency, and queue pause state; view the staff mobile QR code.
+- **Portrait** -- Manage styles and prompts, multi-subject handling, template frames, branding, and backgrounds. See [Branding](#branding) for details.
+- **Delivery** -- Choose Print + Digital or Digital Only, printer and print quality options, immediate digital delivery, and portrait review mode. See [Print Relay](#print-relay-cloud-printing) for cloud printing.
+- **Booth display** -- Configure the video or static instruction screen, QR content, photo book, break message, and terms URL.
+- **Messaging** -- Configure lead capture, promotional messages, NPS, SMS copy, and social sharing. See [Lead Capture](#lead-capture) for details.
+- **Advanced** -- View credential status; configure admin phone numbers, Twilio sender and Messaging Service IDs, Content Template SIDs, OpenAI model choices, and dub.co short-link options.
 
-**Styles & Art** -- Default Style selector, art style toggles with editable prompts (and reset for built-ins), custom style creation with editable names and prompts, "Import from another event" button to copy style prompt overrides between events, Multi-Subject Photos mode, Template Frame (PNG overlay composited on portraits) with Frame Border toggle and color picker, AI Prompts (Preserve Line, Composition Line, Face Detection, Scene Analysis, Smart Reply, User Directive -- each with reset button)
+**Reset & data** is separate from the six settings sections. **Reset settings** restores event and display defaults while keeping connection credentials and the Review PIN configured. **Clear event data** deletes generated data for the active event after confirmation; it does not reset settings or the audit history.
 
-**Branding** -- Single/multi toggle. Single mode: Brand Prompt + Brand Reference Images. Multi mode: brand reference file library, brand cards with per-brand prompts and file selection, enable/disable per brand, brand menu SMS messages. See [Branding](#branding) for details.
-
-**Backgrounds** -- Default Background Prompt, optional Background Selection Menu with configurable choices (name + prompt pairs), background menu SMS messages
-
-**Delivery & Display** -- Delivery Mode (Print + Digital or Digital Only), Printer selection, Print Size (4x6, 6x4 Landscape, 5x7, 8x10), Print Quality (Standard, High, Max), Custom Print Flags, Print Relay Key (for cloud-to-local printing), Booth Display Mode (Video / Static Page / None), Intro Video, Static Page settings (headline, subline, QR code, steps, legal text), Terms URL
-
-**Engagement & Messages** -- Lead Capture (enable/disable, before/after timing, survey messages and fields), Promotional Message, NPS Survey toggle and delay, SMS Messages organized by category (Welcome & Onboarding, Style Selection, Brand Selection, Background Selection, Processing & Delivery, Error Responses, Lead Capture, NPS) with `{variable}` interpolation support. See [Lead Capture](#lead-capture) for details.
-
-**Social Sharing** -- Enable Share Links toggle, SMS Share Page Only toggle, dub.co API Key and Short Domain (global), Slug Prefix (per-event), per-platform toggles and config (X/Twitter, LinkedIn, Instagram), SMS Share Text template, Share Page Title and Description, Personalized Title template. See [Social Sharing](#social-sharing) for details.
-
-**API Keys** -- Twilio credentials (SMS phone number, SMS Messaging Service SID, WhatsApp sender, WhatsApp Messaging Service SID, Account SID, Auth Token) and OpenAI configuration (API Key, Orchestrator Model, Vision Light Model, Image Generation Model, Smart Reply Model, Reference Analysis Model). These override values from `.env`. Setting a Messaging Service SID switches outbound routing from the direct sender to the service's sender pool.
-
-Settings are stored as overrides on top of `.env` defaults. Per-event settings are saved automatically when switching events (see [Switching Events](#switching-events)). Click "Reset to Defaults" to revert all overrides for the current event.
+OpenAI, Twilio auth, and print relay secrets are status-only in **Advanced**; the OpenAI key may show its last four characters. Change these secrets in deployment configuration (or local `.env`), not in the browser. Replace or remove the Review PIN at `/review/settings`. The dub.co key can be replaced with a write-only action in **Advanced** only when no deployment-managed `DUB_API_KEY` is set. Other settings are overrides on top of `.env` defaults. See [Switching Events](#switching-events) for the explicit event-switch flow.
 
 The settings API is also available programmatically:
 
-- `GET /dashboard/api/settings` -- current settings
-- `POST /dashboard/api/settings` -- update settings
-- `POST /dashboard/api/settings/reset` -- revert to `.env` defaults
+- `GET /dashboard/api/settings` -- current non-secret settings and credential status (never raw key, token, or PIN values)
+- `POST /dashboard/api/settings` -- update non-credential settings; credential fields are rejected
+- `POST /dashboard/api/settings/credentials/dub` -- write-only saved dub.co key replacement when `DUB_API_KEY` is not deployment-managed
+- `POST /dashboard/api/settings/reset-all` -- reset event settings to defaults while retaining connection credentials and the Review PIN
+- `POST /dashboard/api/settings/reset` -- legacy per-user compatibility endpoint; does not reset global settings
 - `GET /dashboard/api/settings/files` -- list available templates, videos, printers, known events, and event profiles with saved settings
 - `GET /dashboard/api/settings/event-styles/:eventName` -- read another event's style prompt overrides (for importing)
-- `POST /dashboard/api/settings/upload?type=<type>&filename=<name>` -- upload a file (types: `template`, `video`, `brand-reference`, `booth-image`)
+- `POST /dashboard/api/settings/upload?type=<type>&filename=<name>` -- upload a file (types: `template`, `video`, `brand-reference`, `style-reference`, `background-reference`, `booth-image`)
 
 ## Import Style Prompts
 
-When you craft a great style prompt override for one event and want to reuse it in another, the **Import from another event** button (in the Styles & Art section) lets you copy overrides without manual copy-paste.
+When you craft a great style prompt override for one event and want to reuse it in another, the **Import from another event** button in **Portrait** > **Styles & Art** lets you copy overrides without manual copy-paste.
 
 1. Click **Import from another event** below the custom style form
 2. Select a source event from the dropdown (only events with saved profiles appear)
 3. The panel shows all style prompt overrides from that event with a preview of each prompt
 4. Overrides that differ from the current event are pre-checked
 5. Click **Import Selected** to apply the checked overrides to the current event's style prompts
-6. Click **Save** to persist -- no auto-save, same as any other edit
+6. Click **Save changes** to persist -- no auto-save, same as any other edit
 
 This only imports style prompt overrides (the text you've customized for each art style). It does not copy custom styles, disabled styles, or any other settings.
 
 ## Switching Events
 
-Settings are saved and restored **per event**. Each event keeps its own settings profile -- art styles, brand references, prompts, SMS messages, lead capture, background config, delivery/display options, and most operator controls. Only credentials and shared infrastructure keys are global.
+Most creative and operational settings are saved and restored **per event**. Each event keeps its own profile -- art styles, brand references, prompts, SMS messages, lead capture, background config, delivery/display options, and most operator controls. Connection credentials and shared infrastructure keys remain global; the Review PIN belongs to the selected event.
 
 ### How it works
 
-The Event Name field in the Settings panel is a combo-box. Click the arrow to select a previous event, or type a new name to create one. Selecting an event from the dropdown **immediately saves** the current event's settings and loads the selected event's settings -- no manual Save click needed.
+In `/home/settings` > **Event**, click the Event name field's arrow to choose a previous event, or type a new name. Selecting a suggestion only fills the field. Click **Switch event** to load or create that event. If you have unsaved edits, save them first; otherwise the page asks whether to discard them before switching. The switch does not auto-save browser edits.
 
 When you switch events, the app:
 
-1. Saves the current event's per-event settings to `data/events/{eventName}/settings.json`
+1. Keeps the current event's last saved profile in `data/events/{eventName}/settings.json`
 2. Loads the target event's saved settings (or starts with defaults for a new event)
 3. Creates a downloads subfolder for the event
-4. Resets everyone's print count
+4. Uses the target event's own print counts and data
 5. Refreshes the entire Settings UI with the loaded configuration
 
-Events with saved profiles show a green **saved** badge in the dropdown. New events show a **+ Create** option.
+Events with saved profiles show a **saved** badge in the dropdown. New names show a **Create** suggestion; selecting it still requires **Switch event**.
 
 ### What's saved per event
 
@@ -871,9 +862,9 @@ All creative and event-specific settings, including:
 - Print Relay Key
 - Custom brands library (brand definitions are shared; per-event controls are disabled brands, scene choices, and prompt overrides)
 - Usage overrides
-- dub.co credentials (API Key, Short Domain, Folder ID)
+- dub.co connection settings (API Key, Short Domain, Folder ID)
 
-Admin phones, printer selection, concurrency, queue pause state, delivery mode, and most creative/operator controls are per-event in the current settings model.
+The Review PIN, admin phones, printer selection, concurrency, queue pause state, delivery mode, and most creative/operator controls are per-event in the current settings model. The dub.co slug prefix is also per-event.
 
 ### Brand reference images
 
@@ -881,10 +872,10 @@ Brand reference images are stored in a shared library (`brand-references/` folde
 
 ### Example workflow
 
-1. Configure "LAKingsHockey" with hockey jerseys, brand refs, custom styles → Save
-2. Type "GolfTournament" in event name → click "+ Create" → starts with defaults
-3. Upload golf brand refs, configure golf styles → Save
-4. Switch back to "LAKingsHockey" from dropdown → all hockey settings restored instantly
+1. Configure "LAKingsHockey" with hockey jerseys, brand refs, custom styles → **Save changes**
+2. Type "GolfTournament" in Event name → select the Create suggestion → click **Switch event** → starts with defaults
+3. Upload golf brand refs, configure golf styles → **Save changes**
+4. Select "LAKingsHockey" from the dropdown → click **Switch event** → its saved settings load
 
 Previous event data (downloads, completed jobs, leads, NPS scores) is always preserved on disk regardless of which event is active.
 
@@ -974,7 +965,7 @@ twilio-cartoon-printer/
 │   ├── queue.js          Concurrent generation worker, serial print worker, usage tracking, stale relay recovery
 │   ├── print-relay.js    Cloud-side relay API (poll, claim, download, complete endpoints)
 │   ├── dashboard.js      Admin dashboard (mounted at /dashboard)
-│   ├── home.js           Home page, settings panel, intro video, booth display (mounted at /home)
+│   ├── home.js           Home page, separate settings page, intro video, booth display (mounted at /home)
 │   ├── brb.js            Shared BRB overlay (CSS, HTML, script) used by all booth displays
 │   ├── leads.js          Lead capture SMS survey engine and persistence
 │   ├── nps.js            NPS survey engine and persistence

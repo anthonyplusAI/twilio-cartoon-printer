@@ -21,9 +21,9 @@ The Print Station polls the cloud app for print-ready portraits, downloads them,
 - **Node.js** 22+ and **npm** only when running from source; the release app is standalone
 - A **CUPS-compatible printer** connected via USB or WiFi (e.g. Epson EcoTank ET-8550, DNP DS-RX1, or DNP DS620), with its **driver installed** so a CUPS queue exists. A printer with no driver/queue will not appear in the app's printer list.
 - Local CUPS commands available: `lpstat`, `lp`, `lpoptions`, `cancel`
-- The cloud app running in **Print + Digital** mode with a **Print Relay Key** configured in Settings > Delivery & Printing
+- The cloud app running in **Print + Digital** mode, set in `/home/settings` > **Delivery**, with `PRINT_RELAY_KEY` configured as a cloud deployment secret
 
-The relay key authenticates this app. Printing must also be enabled on the cloud app; if `ENABLE_PRINTING=false`, generated portraits go digital-only and no jobs appear in the relay queue.
+The relay key authenticates this app. For this repository's GitHub Actions deployment, set the `PRINT_RELAY_KEY` repository secret and run the deployment workflow. The cloud Settings page shows key status but cannot display or change its value. Printing must also be enabled on the cloud app; if `ENABLE_PRINTING=false`, generated portraits go digital-only and no jobs appear in the relay queue.
 
 ## Install the Released App
 
@@ -32,7 +32,7 @@ The relay key authenticates this app. Printing must also be enabled on the cloud
 3. Keep the app and `Open Twilio Print Station.command` in the same folder.
 4. On first launch, right-click `Open Twilio Print Station.command`, choose **Open**, then confirm **Open**. The helper clears macOS quarantine and launches the app.
 5. Enter the Cloud URL and Relay Key, select the event and `Dai_Nippon_Printing_DS_RX1`, then click **Connect**.
-6. In the cloud app's Delivery & Printing settings, select Print Size **4x6** for RX1 6x4 media.
+6. In the cloud app's `/home/settings` > **Delivery**, select Print Size **4x6** for RX1 6x4 media.
 
 The Cloud URL, Relay Key, event, and printer selection persist after the first connection with this release.
 
@@ -60,7 +60,7 @@ npm start
 In the app UI:
 
 1. **Cloud URL** -- Click **Edit**, enter your cloud app URL (e.g. `https://your-app.azurecontainerapps.io`), then lock it again if desired.
-2. **Relay Key** -- Click **Edit**, enter the same secret key you set in the cloud app's Settings panel, then lock it again if desired. New installations leave both credential fields blank.
+2. **Relay Key** -- Click **Edit**, enter the same secret key configured as `PRINT_RELAY_KEY` in the cloud deployment, then lock it again if desired. New installations leave both credential fields blank.
 3. **Event to Print** -- Select the event whose jobs this station may print. There is no all-events default.
 4. **Printers** -- Check one or more printers from the list. Leave all unchecked only for simple single-printer auto mode.
 5. **Save Downloaded Portraits To** -- Optionally choose a folder where every final PNG should be copied automatically.

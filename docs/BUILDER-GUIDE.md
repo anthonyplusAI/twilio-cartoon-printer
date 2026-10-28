@@ -174,12 +174,14 @@ The main routes are:
 
 | Route | What it's for |
 |---|---|
-| `/home` | The admin console. Launches booth displays, contains the Settings panel that controls everything. |
+| `/home` | Operator home with event status, booth display launcher, and links to tools. |
+| `/home/settings` | Admin settings for event, portrait, delivery, booth display, messaging, and advanced configuration. |
 | `/dashboard` | Real-time monitoring. Queue depth, failures, top users, geography, print health, combined jobs panel. |
 | `/outreach` | User directory with broadcast SMS, raffle draws, lead export. |
 | `/photogallery` | Photo book — animated flip-through gallery of portraits for booth displays. |
 | `/home/combo` | Split-screen booth display (intro video + photo book side by side). |
 | `/review` | Token/PIN-based review flow for staff. |
+| `/review/settings` | Review settings, including Review PIN replacement and removal. |
 | `/api/generate` | Programmatic generation endpoint used by kiosk/API clients. |
 | `/kiosk` | Browser kiosk submission surface. |
 | `/eval` | Prompt experiment and evaluation tools. |
@@ -187,7 +189,7 @@ The main routes are:
 | `/auth/*` | Google OAuth login/callback/logout. |
 | `/healthz` | Health check used by CI/cloud probes. |
 
-**The settings panel is the heart of the app for operators.** Eight collapsible sections: Event & Operations, Styles & Art, Branding, Backgrounds, Delivery & Display, Engagement & Messages, Social Sharing, API Keys. Everything in there writes to `data/settings.json` and takes effect immediately — no restart. Per-event profiles save/restore the whole set when you switch events.
+**The Settings page at `/home/settings` is the configuration hub.** Its navigation has Event, Portrait, Delivery, Booth display, Messaging, and Advanced, plus a separate Reset & data area. Operators can search settings, edit fields, and click **Save changes**; saved edits take effect immediately. Overrides persist to `data/settings.json`; per-event values also persist to the active event profile. Switching events requires the **Switch event** button and warns before discarding unsaved edits. Advanced shows credential status, Twilio routing IDs, and model choices. OpenAI, Twilio auth, and print relay secrets are changed in deployment configuration; the Review PIN is replaced at `/review/settings`.
 
 **Authentication supports Google OAuth and a shared admin PIN.** Non-public admin routes are gated by `requireAuth()` and accept either method through the same signed session cookie. Configure complete Google credentials, a valid `ADMIN_PIN`, or both; with neither, admin pages return `503` and admin API calls return `401`. Verified `@twilio.com` Google accounts are allowed by default; `ALLOWED_EMAILS` adds individual non-Twilio operators. Public routes remain public by design: `/inbound`, `/healthz`, `/auth/*`, `/review/*`, `/s/*`, approved images/assets/booth uploads, relay endpoints protected by `x-relay-key`, and approved read-only `GET` photo gallery routes. Staged image routes accept only a full admin session or credential-bound review token.
 
@@ -343,19 +345,19 @@ A: `/outreach` → Lead Capture panel → Download CSV. All survey fields plus p
 ### Configuration and styles
 
 **Q: How do I add a new art style?**
-A: `/home` → Settings → Styles & Art → Add Custom Style. Give it a name and a prompt. Live immediately. Existing built-in styles are editable too, with a reset button.
+A: `/home/settings` → **Portrait** → **Styles & Art** → Add Custom Style. Give it a name and a prompt, then click **Save changes**. Existing built-in styles are editable too, with a reset button.
 
 **Q: How do I switch between different events?**
-A: Change the Event Name field in settings. Picking an existing event from the dropdown auto-saves the current event's settings and loads that event's settings. Most operator and creative settings are per-event. Credentials, model selections, the print relay key, the shared custom-brand library, usage overrides, and dub.co credentials stay global.
+A: In `/home/settings` → **Event**, choose an existing event or type a new name, then click **Switch event**. Save any current edits first; the switch warns if unsaved edits would be discarded. Most operator and creative settings are per-event. Connection credentials, model selections, the print relay key, the shared custom-brand library, usage overrides, and dub.co credentials stay global. The Review PIN is per-event.
 
 **Q: What's the difference between global and per-event settings?**
-A: Most creative and operator controls are per-event — styles, brand/background selections, SMS messages, booth display, delivery mode, printer selection, admin phones, concurrency, and queue pause state. Global settings are limited to credentials/model choices, the print relay key, the shared custom-brand library, usage overrides, and dub.co credentials.
+A: Most creative and operator controls are per-event — styles, brand/background selections, SMS messages, booth display, delivery mode, printer selection, admin phones, concurrency, queue pause state, and Review PIN. Global settings include connection credentials, model choices, the print relay key, the shared custom-brand library, usage overrides, and dub.co credentials.
 
 **Q: How do I change the SMS messages users see?**
-A: Settings → Engagement & Messages → SMS Messages. Every message the app sends is editable. `{variable}` interpolation works for dynamic values like `{eventName}`, `{styleName}`, `{firstName}`.
+A: `/home/settings` → **Messaging** → SMS Messages. Every message the app sends is editable. `{variable}` interpolation works for dynamic values like `{eventName}`, `{styleName}`, `{firstName}`. Click **Save changes** when done.
 
 **Q: How do I add a new brand/team (e.g. LA Kings)?**
-A: Settings → Branding → enable multi-brand mode → Add Brand. Give it a name, a prompt ("wearing an LA Kings jersey…"), and select reference images from the uploaded library. Brands are shared across events; each event picks which are enabled.
+A: `/home/settings` → **Portrait** → **Branding** → enable multi-brand mode → Add Brand. Give it a name, a prompt ("wearing an LA Kings jersey…"), and select reference images from the uploaded library. Brands are shared across events; each event picks which are enabled. Click **Save changes** when done.
 
 ### Design and technical decisions
 

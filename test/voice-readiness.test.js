@@ -7,7 +7,7 @@ const { once } = require("node:events");
 
 const { readinessIssues } = require("../lib/voice/readiness");
 const settings = require("../lib/settings");
-const { buildHomeHtml } = require("../lib/home");
+const { buildSettingsHtml } = require("../lib/home");
 const { mountDashboard } = require("../lib/dashboard");
 
 const settingsFile = path.join(__dirname, "..", "data", "settings.json");
@@ -134,7 +134,7 @@ test("settings API returns 400 and reasons for Voice plus before-survey", async 
         const response = await fetch(`http://127.0.0.1:${server.address().port}/dashboard/api/settings`, {
             method: "POST",
             headers: { "content-type": "application/json" },
-            body: JSON.stringify({ enableVoice: true, leadCaptureMode: "before" }),
+            body: JSON.stringify({ _forEvent: settings.get("eventName"), enableVoice: true, leadCaptureMode: "before" }),
         });
         assert.equal(response.status, 400);
         assert.match(JSON.stringify(await response.json()), /lead capture/);
@@ -145,7 +145,7 @@ test("settings API returns 400 and reasons for Voice plus before-survey", async 
 });
 
 test("operator settings expose the Voice switch, number, invitation templates, and readiness note", () => {
-    const html = buildHomeHtml();
+    const html = buildSettingsHtml();
     assert.match(html, /id="sEnableVoice"/);
     assert.match(html, /id="sTwilioVoiceNumber"/);
     assert.match(html, /id="sCtVoiceInvitationEn"/);
