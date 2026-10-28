@@ -420,6 +420,22 @@ html.combo-embedded .count-label {
 html.combo-embedded .count-label strong {
   font-size: clamp(42px, 3.5vw, 54px);
 }
+/* On tall combo displays, keep the total and book together as one centered
+   stage instead of leaving the total at the top of an oversized book area. */
+@media (min-height: 900px) {
+  html.combo-embedded .scene:not(.manage-mode) .count-label {
+    margin-top: auto;
+    padding: clamp(20px, 3vh, 36px) 16px clamp(6px, 1vh, 12px);
+    font-size: clamp(18px, 1.9vw, 28px);
+  }
+  html.combo-embedded .scene:not(.manage-mode) .count-label strong {
+    font-size: clamp(42px, 5vw, 76px);
+  }
+  html.combo-embedded .scene:not(.manage-mode) .book-area {
+    flex: 0 1 auto;
+    margin-bottom: auto;
+  }
+}
 /* In a stacked combo, the fixed vh book height can spill upward over the
    count. Cap it at the remaining gallery stage. */
 html.combo-embedded .book-wrap { max-height: 100%; }
