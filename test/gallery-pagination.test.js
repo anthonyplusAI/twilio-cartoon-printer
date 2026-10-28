@@ -128,7 +128,7 @@ test("a one-style batch still labels its portraits", () => {
 
     function element() {
         return {
-            children: [], dataset: {}, style: {}, innerHTML: "", className: "", id: "",
+            children: [], dataset: {}, style: { setProperty() {} }, innerHTML: "", className: "", id: "",
             classList: { add() {}, remove() {} },
             appendChild(child) { this.children.push(child); },
             addEventListener() {},
@@ -154,6 +154,7 @@ test("a one-style batch still labels its portraits", () => {
         pageOffset: 0,
         bookUsesTurn: false,
         hydrateBookPages() {},
+        getBookRatio: () => 1.5,
         getBookSize: () => ({ width: 900, height: 600 }),
         setBookPage() {},
         highlightThumbs() {},
