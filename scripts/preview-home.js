@@ -61,6 +61,103 @@ const fixtureFiles = Object.freeze({
     brandReferences: [], styleReferences: [], backgroundReferences: [],
 });
 
+function buildComboPreviewHtml() {
+    return `<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script>(function(){var t=localStorage.getItem('twilio-theme')||'dark';document.documentElement.setAttribute('data-theme',t)})()</script>
+<link rel="icon" type="image/svg+xml" href="/assets/icon-twilio-bug-red.svg">
+<link rel="stylesheet" href="/assets/twilio-brand.css">
+<title>Booth Display — Twilio Photobooth</title>
+<style>
+  * { margin: 0; padding: 0; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: var(--th-bg, #000D25); }
+  .split { display: flex; width: 100%; height: 100%; }
+  .split iframe { border: none; height: 100%; }
+  #leftPane, #rightPane { flex: 1; }
+  .handle { width: 8px; flex-shrink: 0; cursor: col-resize; background: var(--th-card, rgba(255,255,255,0.06)); position: relative; z-index: 10; }
+  .handle::after { content: ''; position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); width: 3px; height: 36px; border-radius: 2px; background: var(--th-text-muted, rgba(255,255,255,0.25)); }
+  .drag-overlay { display: none; position: fixed; inset: 0; z-index: 5; cursor: col-resize; }
+  .drag-overlay.active { display: block; }
+  @media (orientation: portrait) {
+    .split { flex-direction: column; }
+    .split iframe { width: 100%; min-width: 0; min-height: 0; }
+    #leftPane { flex: 0 0 42%; }
+    #rightPane { flex: 1; }
+    .handle { width: 100%; height: 8px; cursor: row-resize; }
+    .handle::after { width: 36px; height: 3px; }
+    .drag-overlay { cursor: row-resize; }
+  }
+</style>
+</head>
+<body>
+<div class="split">
+  <iframe id="leftPane" src="/home/panel" allow="autoplay; fullscreen" allowfullscreen title="QR instructions"></iframe>
+  <div class="handle" id="handle" role="separator" aria-label="Resize display panes"></div>
+  <iframe id="rightPane" src="/photogallery/" allow="fullscreen" allowfullscreen title="Photo book"></iframe>
+</div>
+<div class="drag-overlay" id="overlay"></div>
+<script>
+(function() {
+  var handle = document.getElementById("handle");
+  var overlay = document.getElementById("overlay");
+  var leftPane = document.getElementById("leftPane");
+  var rightPane = document.getElementById("rightPane");
+  var dragging = false;
+  handle.addEventListener("pointerdown", function(e) {
+    e.preventDefault();
+    dragging = true;
+    overlay.classList.add("active");
+    handle.setPointerCapture(e.pointerId);
+  });
+  document.addEventListener("pointermove", function(e) {
+    if (!dragging) return;
+    e.preventDefault();
+    var portrait = window.innerHeight > window.innerWidth;
+    var total = portrait ? window.innerHeight : window.innerWidth;
+    var position = portrait ? e.clientY : e.clientX;
+    var available = total - 8;
+    if (portrait) {
+      var firstHeight = Math.max(8, Math.min(available - 8, position - 4));
+      leftPane.style.flex = rightPane.style.flex = "none";
+      leftPane.style.height = firstHeight + "px";
+      rightPane.style.height = (available - firstHeight) + "px";
+    } else {
+      var percent = Math.max(15, Math.min(85, position / total * 100));
+      leftPane.style.flex = rightPane.style.flex = "none";
+      leftPane.style.width = percent + "%";
+      rightPane.style.width = (100 - percent) + "%";
+    }
+  });
+  function stopDragging() { dragging = false; overlay.classList.remove("active"); }
+  document.addEventListener("pointerup", stopDragging);
+  document.addEventListener("pointercancel", stopDragging);
+  window.addEventListener("resize", function() {
+    [leftPane, rightPane].forEach(function(frame) { frame.style.flex = frame.style.width = frame.style.height = ""; });
+  });
+  function applyTheme(theme) {
+    if (theme !== "dark" && theme !== "light") return;
+    document.documentElement.setAttribute("data-theme", theme);
+    localStorage.setItem("twilio-theme", theme);
+    [leftPane, rightPane].forEach(function(frame) {
+      try { frame.contentDocument.documentElement.setAttribute("data-theme", theme); } catch (err) {}
+    });
+  }
+  window.addEventListener("message", function(e) {
+    if (e.origin !== window.location.origin || !e.data || e.data.type !== "twilio-theme-change") return;
+    applyTheme(e.data.theme);
+  });
+  window.addEventListener("storage", function(e) {
+    if (e.key === "twilio-theme") applyTheme(e.newValue);
+  });
+})();
+</script>
+</body>
+</html>`;
+}
+
 function send(response, status, body, contentType, headers = {}) {
     response.writeHead(status, {
         "Content-Type": contentType,
@@ -121,7 +218,7 @@ function serveAsset(response, pathname) {
 }
 
 function createPreviewServer() {
-    const { buildHomeHtml, buildSettingsHtml } = require("../lib/home");
+    const { buildHomeHtml, buildSettingsHtml, buildStaticPanelHtml } = require("../lib/home");
     const { renderDashboardPage } = require("../lib/dashboard-page");
     const { renderLogsPage } = require("../lib/logs-page");
     const { buildOutreachHtml } = require("../lib/outreach-page");
@@ -130,6 +227,8 @@ function createPreviewServer() {
     const { buildMobileSettingsHtml } = require("../lib/review-settings-page");
     const { renderEvalRunsPage, renderEvalNewPage, renderEvalPhotosPage, renderEvalVariantsPage } = require("../lib/eval-page");
     const { renderEvalRunDetailPage } = require("../lib/eval-run-page");
+    const { userBarSnippet } = require("../lib/auth");
+    const userBar = userBarSnippet();
     return http.createServer((request, response) => {
         let pathname;
         try { pathname = new URL(request.url, `http://${HOST}`).pathname; }
@@ -148,18 +247,30 @@ function createPreviewServer() {
         if (pathname === "/home/settings") {
             return send(response, 200, buildSettingsHtml({ demo: true }), "text/html; charset=utf-8");
         }
+        if (pathname === "/home/combo") {
+            return send(response, 200, buildComboPreviewHtml(), "text/html; charset=utf-8");
+        }
+        if (pathname === "/home/panel") {
+            return buildStaticPanelHtml("en", {
+                locale: "en",
+                baseUrl: `http://${HOST}:${request.socket.localPort}`,
+                eventName: fixtures.EVENTS[0],
+                getSetting: (key) => fixtureSettings[key],
+            }).then((html) => send(response, 200, html, "text/html; charset=utf-8"))
+                .catch(() => send(response, 500, "Preview panel unavailable.", "text/plain; charset=utf-8"));
+        }
         if (pathname === "/dashboard" || pathname === "/dashboard/logs" || pathname === "/outreach" || pathname === "/photogallery") {
             response.writeHead(302, { Location: pathname + "/", "Cache-Control": "no-store" });
             return response.end();
         }
         if (pathname === "/dashboard/") {
-            return send(response, 200, renderDashboardPage(), "text/html; charset=utf-8");
+            return send(response, 200, renderDashboardPage({ userBar }), "text/html; charset=utf-8");
         }
         if (pathname === "/dashboard/logs/") {
-            return send(response, 200, renderLogsPage(), "text/html; charset=utf-8");
+            return send(response, 200, renderLogsPage({ userBar }), "text/html; charset=utf-8");
         }
         if (pathname === "/outreach/") {
-            return send(response, 200, buildOutreachHtml(), "text/html; charset=utf-8");
+            return send(response, 200, buildOutreachHtml({ userBar }), "text/html; charset=utf-8");
         }
         if (pathname === "/photogallery/") {
             return send(response, 200, buildPageHtml(fixtures.EVENTS[0], "en", {
@@ -175,22 +286,22 @@ function createPreviewServer() {
         if (pathname === "/eval" || pathname === "/eval/") {
             return send(response, 200, renderEvalRunsPage({
                 summaries: fixtures.evalRuns, evalSettings: { maxConcurrent: 12 }, activeEvent: fixtures.EVENTS[0],
-                query: Object.fromEntries(url.searchParams),
+                query: Object.fromEntries(url.searchParams), userBar,
             }), "text/html; charset=utf-8");
         }
         if (pathname === "/eval/new" || pathname === "/eval/new/") {
             return send(response, 200, renderEvalNewPage({
                 activeStyles: fixtures.evalStyles, activeBrands: {}, photos: fixtures.evalPhotos, savedVariants: fixtures.evalVariants,
                 evalSettings: { maxConcurrent: 12 }, activeEvent: fixtures.EVENTS[0], eventNames: fixtures.EVENTS,
-                existingGroups: ["Launch prep", "Style tuning", "Delivery tests"],
+                existingGroups: ["Launch prep", "Style tuning", "Delivery tests"], userBar,
             }), "text/html; charset=utf-8");
         }
         if (pathname === "/eval/photos" || pathname === "/eval/photos/") {
-            return send(response, 200, renderEvalPhotosPage({ photos: fixtures.evalPhotos }), "text/html; charset=utf-8");
+            return send(response, 200, renderEvalPhotosPage({ photos: fixtures.evalPhotos, userBar }), "text/html; charset=utf-8");
         }
         if (pathname === "/eval/variants" || pathname === "/eval/variants/") {
             return send(response, 200, renderEvalVariantsPage({
-                variants: fixtures.evalVariants, activeStyles: fixtures.evalStyles, activeBrands: {},
+                variants: fixtures.evalVariants, activeStyles: fixtures.evalStyles, activeBrands: {}, userBar,
             }), "text/html; charset=utf-8");
         }
         if (pathname.startsWith("/eval/run/")) {
@@ -200,7 +311,7 @@ function createPreviewServer() {
             const manifest = fixtures.evalRunManifest(id);
             if (!manifest) return send(response, 404, "Run not found in sample data.", "text/plain; charset=utf-8");
             return send(response, 200, renderEvalRunDetailPage({
-                manifest, query: Object.fromEntries(url.searchParams),
+                manifest, query: Object.fromEntries(url.searchParams), userBar,
             }), "text/html; charset=utf-8");
         }
         if (pathname.startsWith("/assets/")) return serveAsset(response, pathname);
@@ -406,6 +517,7 @@ if (require.main === module) {
         createPreviewServer().listen(port, HOST, () => {
             console.log(`Read-only demo preview: http://${HOST}:${port}/home/`);
             console.log(`Settings: http://${HOST}:${port}/home/settings`);
+            console.log(`Combo display: http://${HOST}:${port}/home/combo`);
             console.log(`Dashboard: http://${HOST}:${port}/dashboard/`);
             console.log(`Outreach: http://${HOST}:${port}/outreach/`);
             console.log(`Photo book: http://${HOST}:${port}/photogallery/`);

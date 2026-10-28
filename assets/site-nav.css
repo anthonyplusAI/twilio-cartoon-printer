@@ -55,6 +55,41 @@
 .site-nav .site-nav-link.is-active,
 .site-nav .site-nav-link[aria-current="page"] { background: rgba(239, 34, 58, .14); color: var(--brand-red, #ef223a); }
 .site-nav .site-nav-link.is-active:hover { background: rgba(239, 34, 58, .2); }
+.site-nav .site-nav-account {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  min-width: 0;
+  padding-left: 14px;
+  border-left: 1px solid var(--th-card-border, #38425e);
+}
+.site-nav .site-nav-account:empty { display: none; }
+.site-nav .site-nav-account .user-bar {
+  min-width: 0;
+  max-width: 190px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  backdrop-filter: none;
+}
+.site-nav .site-nav-account .user-bar-name {
+  min-width: 0;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.site-nav .site-nav-account .user-bar-logout {
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  margin: 0;
+  color: var(--th-text-secondary, #dde0e6);
+}
+.site-nav .site-nav-account .user-bar-logout:hover { color: var(--brand-red, #ef223a); }
+.site-nav .site-nav-account .user-bar-logout:focus-visible {
+  outline: 2px solid var(--blue-300, #19abf3);
+  outline-offset: 2px;
+}
 .site-nav .site-nav-mobile { display: none; }
 .site-nav a:focus-visible, .site-nav summary:focus-visible { outline: 2px solid var(--blue-300, #19abf3); outline-offset: 2px; }
 @media (max-width: 1050px) {
@@ -94,10 +129,18 @@
   }
   .site-nav .site-nav-mobile .site-nav-link { justify-content: flex-start; min-height: 41px; padding: 9px 12px; font-size: 13px; }
 }
+@media (max-width: 700px) {
+  .site-nav .site-nav-account .user-bar-name { display: none; }
+  .site-nav .site-nav-account { padding-left: 8px; }
+}
 @media (max-width: 400px) {
-  .site-nav { padding: 9px 11px; }
+  .site-nav { gap: 6px; padding: 9px 11px; }
   .site-nav .site-nav-brand { font-size: 14px; }
   .site-nav .site-nav-brand img { width: 23px; height: 23px; }
   .site-nav .site-nav-mobile summary { gap: 6px; padding: 7px 8px; }
   .site-nav .site-nav-current { display: none; }
+  .site-nav .site-nav-account { padding-left: 6px; }
+}
+@media (max-width: 360px) {
+  .site-nav .site-nav-brand span { display: none; }
 }
