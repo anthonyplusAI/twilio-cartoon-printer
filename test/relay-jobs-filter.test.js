@@ -28,7 +28,6 @@ fs.mkdirSync(READY_DIR, { recursive: true });
 after(() => {
     try { fs.unlinkSync(targetedPath); } catch {}
     for (const filePath of eventPaths) { try { fs.unlinkSync(filePath); } catch {} }
-    setImmediate(() => process.exit(0));
 });
 
 function getRelay(urlPath, version, overrides = {}) {

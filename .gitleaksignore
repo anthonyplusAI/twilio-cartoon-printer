@@ -1,0 +1,7 @@
+# Exact findings from synthetic credential fixtures added in a81a990.
+# Keep the full-history scan active for every other line and commit.
+a81a990ae52e8e52aabfdf053a86a57dfb98fa01:test/settings-security.test.js:generic-api-key:56
+a81a990ae52e8e52aabfdf053a86a57dfb98fa01:test/settings-security.test.js:generic-api-key:57
+a81a990ae52e8e52aabfdf053a86a57dfb98fa01:test/settings-security.test.js:generic-api-key:58
+a81a990ae52e8e52aabfdf053a86a57dfb98fa01:test/settings-security.test.js:generic-api-key:90
+a81a990ae52e8e52aabfdf053a86a57dfb98fa01:test/settings-security.test.js:generic-api-key:111

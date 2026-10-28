@@ -12,8 +12,6 @@ const eventDir = settings.getDownloadDir(EVENT);
 
 after(() => {
     fs.rmSync(eventDir, { recursive: true, force: true });
-    // Queue imports leave a keep-alive handle open after assertions complete.
-    setImmediate(() => process.exit(0));
 });
 
 test("reanalyzed variants preserve the original landscape output profile", async () => {

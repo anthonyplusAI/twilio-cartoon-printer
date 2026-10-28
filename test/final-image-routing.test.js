@@ -42,7 +42,6 @@ before(async () => {
 
 after(() => {
     fs.rmSync(eventDir, { recursive: true, force: true });
-    setImmediate(() => process.exit(0));
 });
 
 test("share image route serves the final PNG", async () => {

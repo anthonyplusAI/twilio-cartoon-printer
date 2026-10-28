@@ -40,9 +40,6 @@ before(async () => {
 
 after(() => {
     fs.rmSync(eventDir, { recursive: true, force: true });
-    // Importing the gallery pulls in the messaging chain, which leaves a
-    // keep-alive handle open in tests. Match the existing dashboard test.
-    setImmediate(() => process.exit(0));
 });
 
 test("gallery infers landscape orientation when legacy job metadata is absent", async () => {

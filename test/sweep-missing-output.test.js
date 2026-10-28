@@ -47,12 +47,6 @@ after(() => {
         try { fs.unlinkSync(path.join(dir, ORPHAN)); } catch {}
         try { fs.unlinkSync(path.join(dir, HEALTHY)); } catch {}
     }
-    // Requiring lib/queue pulls in the messaging/Twilio chain, which opens a
-    // keep-alive Socket that holds the event loop open after tests finish (a
-    // pre-existing trait of every test that imports that chain). Force a clean
-    // exit so this file doesn't sit until the runner's timeout. Assertions have
-    // already run and reported by the time after() fires.
-    setImmediate(() => process.exit(0));
 });
 
 test("sweepMissingOutputJobs moves a ready job with no output PNG to FAILED_DIR", async () => {

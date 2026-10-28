@@ -18,7 +18,6 @@ const readyPath = path.join(READY_DIR, FNAME);
 
 after(() => {
     try { fs.unlinkSync(readyPath); } catch {}
-    setImmediate(() => process.exit(0));
 });
 
 function post(app, p, body) {

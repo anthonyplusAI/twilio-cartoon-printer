@@ -58,7 +58,6 @@ after(() => {
     }
     // Remove the synthetic event's download dir + any output image left in it.
     try { fs.rmSync(settings.getDownloadDir(EVENT), { recursive: true, force: true }); } catch {}
-    setImmediate(() => process.exit(0));
 });
 
 function writeDone(job) {

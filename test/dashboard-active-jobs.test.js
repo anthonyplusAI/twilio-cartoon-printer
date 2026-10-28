@@ -1,4 +1,4 @@
-const { test, after } = require("node:test");
+const { test } = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const express = require("express");
@@ -9,12 +9,6 @@ const { READY_DIR, PRINTING_DIR } = require("../lib/config");
 // (worktree / CI). Ensure they exist so the cold-cache read has a dir to scan.
 fs.mkdirSync(READY_DIR, { recursive: true });
 fs.mkdirSync(PRINTING_DIR, { recursive: true });
-
-// Mounting the dashboard pulls in the messaging/Twilio chain, which opens a
-// keep-alive Socket that holds the event loop open after tests finish. Force a
-// clean exit once assertions have reported, instead of waiting for the runner's
-// timeout. (Pre-existing trait shared by other tests importing that chain.)
-after(() => setImmediate(() => process.exit(0)));
 
 // End-to-end test of the /api/active-jobs endpoint and the cold-cache fix.
 // We mount the real dashboard router on a bare app and hit it over HTTP on a
