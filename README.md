@@ -63,7 +63,7 @@ flowchart TB
   R --> P2
 ```
 
-After sending a selfie, users usually receive a numbered style menu and reply with a number or style name. If only one style is active, or the caption already names a known style, the menu is skipped. The bot can also respond conversationally to questions with AI. All user-facing SMS copy is configurable from the admin Settings panel at runtime.
+After sending a selfie, users usually receive a numbered style menu and reply with a number or style name. If only one style is active, or the caption already names a known style, the menu is skipped. The bot can also respond conversationally to questions with AI. All user-facing SMS copy is configurable from the admin Settings page (`/home/settings`) at runtime.
 
 ## Resources
 
@@ -87,7 +87,7 @@ See [Installation](#installation), [Usage](#usage), and [Cloud Deployment](#clou
 - **pnpm** -- install with `npm install -g pnpm` ([docs](https://pnpm.io/installation))
 - **Twilio account** with an SMS/MMS sender, a Messaging Service, or a WhatsApp sender
 - **OpenAI API key** with access to the configured text and image models (`gpt-5.5`, `gpt-5.4-nano`, and `gpt-image-2-2026-04-21` by default)
-- **Google OAuth client** for the admin UI (`/home`, `/dashboard`, `/outreach`, and settings APIs)
+- **Google OAuth client** for the admin UI (`/home`, `/home/settings`, `/dashboard`, `/outreach`, and settings APIs)
 - **Printer** (optional) -- Epson EcoTank ET-8550 recommended, connected via USB/WiFi and registered in CUPS
 
 ## Installation
@@ -146,7 +146,7 @@ All other values have defaults. See [docs/GUIDE.md](docs/GUIDE.md#environment-va
 pnpm start
 ```
 
-The server starts on port 3000 in local development. The home page is available at `http://localhost:3000`, but protected admin pages return `503` until Google OAuth or `ADMIN_PIN` is configured.
+The server starts on port 3000 in local development. Home is available at `http://localhost:3000/home/` and Settings at `http://localhost:3000/home/settings`, but protected admin pages return `503` until Google OAuth or `ADMIN_PIN` is configured.
 
 ### 2. Connect Twilio
 
@@ -170,10 +170,10 @@ Voice is a per-event switch in **Settings**, off by default. When enabled, a sel
 
 To set it up:
 
-1. Use a Voice-capable Twilio number. Set its E.164 value as the global `TWILIO_VOICE_NUMBER` (or enter it under global Twilio settings). It may also be your SMS number. Set `BASE_URL` to this app's public `https://` origin; your proxy must pass WebSocket upgrades through to the app.
+1. Use a Voice-capable Twilio number. Set its E.164 value as the global `TWILIO_VOICE_NUMBER` (or enter it under **Advanced > Twilio routing** at `/home/settings`). It may also be your SMS number. Set `BASE_URL` to this app's public `https://` origin; your proxy must pass WebSocket upgrades through to the app.
 2. Complete [Conversation Relay onboarding](https://www.twilio.com/docs/voice/conversationrelay/onboarding) in your Twilio account. In the number's **Voice** configuration, set the incoming-call webhook to `POST https://your-server/voice/inbound`. The app's signed TwiML connects Twilio to `wss://your-server/voice/ws`; `/voice/action` is its signed completion callback. Keep the existing Messaging webhook on `/inbound`.
-3. For WhatsApp intake, create and obtain approval for the English and Brazilian Portuguese `voiceInvitation`, `voiceDelivery`, and `voiceFailure` Content Templates. Inspect the definitions without calling Twilio with `BASE_URL=https://your-server TWILIO_TEMPLATE_SAMPLE_PORTRAIT_PATH=s/sample/img pnpm templates:create --print-only`, then run `pnpm templates:create` with valid credentials and a reachable sample image. Put the **approved** SIDs in Settings. The invitation uses a static phone-call button; if the Voice number changes, create and approve new invitation templates for that number and replace both invitation SIDs. If you supply invitation SIDs through environment variables, set `TWILIO_TEMPLATE_VOICE_INVITATION_PHONE` and `TWILIO_TEMPLATE_VOICE_INVITATION_PHONE_PT_BR` to the approved button number as well. A Voice call does not reopen WhatsApp's messaging window, so delayed results and failures use approved templates too.
-4. Turn on **Enable Voice** for the event in Settings. The readiness check requires the Voice number, public HTTPS URL, Twilio and OpenAI credentials, and WhatsApp templates when applicable. Voice cannot be combined with lead capture **before** the selfie; after-delivery surveys remain available. New selfies use the current setting, while already invited callers can finish until their 30-minute invitation expires. Switching the active event invalidates unfinished requests from the old event.
+3. For WhatsApp intake, create and obtain approval for the English and Brazilian Portuguese `voiceInvitation`, `voiceDelivery`, and `voiceFailure` Content Templates. Inspect the definitions without calling Twilio with `BASE_URL=https://your-server TWILIO_TEMPLATE_SAMPLE_PORTRAIT_PATH=s/sample/img pnpm templates:create --print-only`, then run `pnpm templates:create` with valid credentials and a reachable sample image. Put the **approved** SIDs under **Advanced > Twilio routing** at `/home/settings`. The invitation uses a static phone-call button; if the Voice number changes, create and approve new invitation templates for that number and replace both invitation SIDs. If you supply invitation SIDs through environment variables, set `TWILIO_TEMPLATE_VOICE_INVITATION_PHONE` and `TWILIO_TEMPLATE_VOICE_INVITATION_PHONE_PT_BR` to the approved button number as well. A Voice call does not reopen WhatsApp's messaging window, so delayed results and failures use approved templates too.
+4. Turn on **Enable Voice** for the event under **Messaging** at `/home/settings`. The readiness check requires the Voice number, public HTTPS URL, Twilio and OpenAI credentials, and WhatsApp templates when applicable. Voice cannot be combined with lead capture **before** the selfie; after-delivery surveys remain available. New selfies use the current setting, while already invited callers can finish until their 30-minute invitation expires. Switching the active event invalidates unfinished requests from the old event.
 
 The invitation and agent support English and Brazilian Portuguese. When the attendee's language is unknown, a bilingual WhatsApp explanation precedes the phone-call button, and the call asks them to choose a language. They can change languages during the call. Caller phone matching needs no pairing code, but caller ID can be spoofed; the agent never reads photo-specific details aloud, and the finished image goes only to the original message conversation. Keep Voice on one app replica with the persistent `data/`, `queue/`, and `downloads/` mount; the file-backed claim store is designed for one replica.
 
@@ -185,14 +185,14 @@ Text a selfie to your Twilio phone number or WhatsApp sender. You should receive
 
 ## Printer Setup
 
-To enable printing, set delivery mode to **Print + Digital** in the admin Settings panel or set `ENABLE_PRINTING=true`. You also need a CUPS-compatible printer connected to the machine running the server, or to the print relay laptop for cloud deployments. See [Print Relay](#print-relay-cloud-printing).
+To enable printing, set delivery mode to **Print + Digital** in **Delivery** at `/home/settings` or set `ENABLE_PRINTING=true`. You also need a CUPS-compatible printer connected to the machine running the server, or to the print relay laptop for cloud deployments. See [Print Relay](#print-relay-cloud-printing).
 
 ```sh
 # Find your printer name
 lpstat -p
 ```
 
-Set your printer name in the admin Settings panel under **Delivery & Display**, or in `.env`:
+Set your printer name in **Delivery** at `/home/settings`, or in `.env`:
 
 ```sh
 PRINTER_NAME=EPSON_ET_8550_Series
@@ -251,7 +251,7 @@ No ngrok needed -- the cloud app is already publicly accessible.
 
 If you don't need printing, use **Digital Only** mode. Portraits are delivered via MMS or share link directly. No printer or relay is needed.
 
-Set delivery mode to **Digital Only** in the Settings panel, or:
+Set delivery mode to **Digital Only** in **Delivery** at `/home/settings`, or:
 
 ```sh
 ENABLE_PRINTING=false
@@ -276,7 +276,7 @@ Cloud App (Azure/Docker)          Event Laptop
 
 ### Step 1: Enable cloud relay printing
 
-Open the admin Settings panel on the cloud app. Under **Delivery & Display**, set delivery mode to **Print + Digital** and enter a strong, unique **Print Relay Key** (for example, generate one with `openssl rand -hex 32`). Save.
+Open `/home/settings` on the cloud app. Under **Delivery**, set delivery mode to **Print + Digital** and save. Generate a strong, unique relay key (for example, with `openssl rand -hex 32`) and set `PRINT_RELAY_KEY` in the cloud deployment configuration. For this repository's GitHub Actions deployment, update the `PRINT_RELAY_KEY` repository secret and run the deployment workflow. The Settings page shows whether the key is configured; it does not display or accept the key itself.
 
 `PRINT_RELAY_KEY` enables the relay API and authenticates relay agents. `ENABLE_PRINTING=true` is what causes generated jobs to enter `queue/ready/` for printing. If printing is disabled, completed jobs go digital-only and the relay has nothing to claim.
 
@@ -388,7 +388,8 @@ Both the Print Station app and CLI relay share these capabilities:
 
 | Route | Description |
 |---|---|
-| `/home` | Admin console -- settings, booth display launcher |
+| `/home` | Operator home -- event status, booth display launcher, and links to tools |
+| `/home/settings` | Settings -- event, portrait, delivery, booth display, messaging, and advanced configuration |
 | `/home/video` | Fullscreen looping intro video for booth displays |
 | `/home/panel` | Static instruction page with QR code, steps, and Twilio branding |
 | `/home/combo` | Split-screen booth display (video or static page + photo book) |
@@ -399,6 +400,7 @@ Both the Print Station app and CLI relay share these capabilities:
 | `/s/:id` | Shareable portrait page with OG meta tags and social share buttons |
 | `/auth/*` | Google OAuth login/callback/logout routes |
 | `/review/*` | Mobile review flow and review-token routes |
+| `/review/settings` | Review settings, including write-only Review PIN replacement/removal |
 | `/api/generate` | Programmatic/kiosk generation API |
 | `/kiosk` | Browser kiosk submission with SMS or approved-template WhatsApp portrait delivery |
 | `/eval` | Prompt experiment and evaluation tools |
@@ -413,15 +415,15 @@ Both the Print Station app and CLI relay share these capabilities:
 - **AI smart replies** -- conversational responses to text-only messages
 - **Background selection** -- configurable background options users can choose via SMS
 - **Template frames** -- PNG overlays with transparent windows, auto-detected safe zones
-- **Configurable SMS messages** -- every message editable from the Settings panel, with `{variable}` interpolation
+- **Configurable SMS messages** -- every message editable from the Settings page, with `{variable}` interpolation
 - **Lead capture** -- SMS survey (before or after portrait) with configurable fields, toggles, and CSV export
 - **NPS survey** -- 1-5 rating after last portrait, with dashboard stats and PDF report integration
 - **Booth display modes** -- video (looping intro), static instruction page (QR code + steps with Twilio branding), or none (photo book only)
 - **BRB screen** -- "We'll Be Right Back" overlay on all booth displays
 - **Social sharing** -- branded share page with OG meta tags, per-platform share buttons (X/Twitter, LinkedIn, Instagram), dub.co URL shortening with custom domains, personalized titles via lead capture data
 - **Import style prompts** -- copy style prompt overrides from one event to another
-- **Per-event settings** -- save and restore complete settings profiles per event
-- **Runtime settings** -- all config changeable from `/home` without restarts
+- **Per-event settings** -- save and restore creative and operational settings profiles per event
+- **Runtime settings** -- edit event settings at `/home/settings`; supply connection secrets through deployment configuration or local `.env`
 - **Dashboard** -- job health, failure breakdown, combined jobs panel (failed + completed with filter tabs), queue status, NPS scores, stuck job alerts, PDF reports
 - **Outreach** -- broadcast SMS, animated raffle draws, lead reports
 - **Photo book** -- realistic page-turn gallery for booth displays

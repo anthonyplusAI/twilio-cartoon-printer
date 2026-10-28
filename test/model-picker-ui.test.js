@@ -1,9 +1,9 @@
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
-const { buildHomeHtml } = require("../lib/home");
+const { buildSettingsHtml } = require("../lib/home");
 
 test("all configurable OpenAI models use editable capability-specific pickers", () => {
-    const html = buildHomeHtml();
+    const html = buildSettingsHtml();
     const pickers = {
         sModelOrch: "openaiVisionModels",
         sModelVision: "openaiVisionModels",

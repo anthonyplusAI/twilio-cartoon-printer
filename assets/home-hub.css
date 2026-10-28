@@ -1,0 +1,95 @@
+/* Home keeps the original console's brand and card language around the new hub layout. */
+*, *::before, *::after { box-sizing: border-box; }
+html { font-size: 17px; }
+body { min-height: 100vh; margin: 0; padding: clamp(24px, 4vw, 56px) clamp(16px, 3vw, 40px); }
+
+.home-shell { max-width: 1040px; margin: 0 auto; }
+.home-hero { position: relative; display: flex; flex-direction: column; align-items: center; text-align: center; padding: 8px 0 34px; isolation: isolate; }
+.hero-outline { position: absolute; z-index: -1; top: -72px; left: 50%; width: 350px; height: 350px; transform: translateX(-50%); color: var(--brand-red); opacity: .1; pointer-events: none; }
+.hero-brand { display: inline-flex; align-items: center; justify-content: center; gap: 12px; color: var(--th-text); font: 800 clamp(24px, 3vw, 30px)/1.15 'Twilio Sans Display', sans-serif; }
+.hero-bug { flex: 0 0 auto; width: 36px; height: 36px; color: var(--gray-50); }
+html[data-theme="light"] .hero-bug { color: var(--brand-red); }
+.hero-subtitle { margin: 8px 0 15px; color: var(--th-text-dim); font-size: 16px; }
+.home-hero .theme-toggle { margin: 0; }
+.review-notify { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px 16px; margin: 0 0 16px; padding: 12px 18px; border-radius: 10px; background: linear-gradient(90deg, var(--blue-300), var(--brand-red)); color: #fff; font-size: 14px; font-weight: 700; }
+.review-notify[hidden] { display: none; }
+.review-notify a { flex: 0 0 auto; padding: 6px 12px; border-radius: 6px; background: rgba(0, 0, 0, .25); color: #fff; font-size: 12px; text-decoration: none; }
+.review-notify a:hover { background: rgba(0, 0, 0, .4); }
+
+.event-summary { display: flex; align-items: end; justify-content: space-between; gap: 20px; padding: 22px 0 20px; border-top: 1px solid var(--th-border-subtle); }
+.event-label { color: var(--brand-red); font-size: 12px; font-weight: 700; }
+.event-summary h1 { margin: 4px 0 5px; font-size: clamp(27px, 4vw, 36px); line-height: 1.12; letter-spacing: 0; overflow-wrap: anywhere; }
+.event-summary p { max-width: 650px; margin: 0; color: var(--th-text-dim); font-size: 14px; }
+.home-demo-badge { flex: 0 0 auto; align-self: center; padding: 7px 10px; border: 1px solid var(--th-card-border); border-radius: 8px; color: var(--th-text-dim); font-size: 12px; font-weight: 700; }
+
+.status-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 0 0 18px; }
+.status-item { min-width: 0; padding: 17px 18px; background: var(--th-card-gradient); border: 1px solid var(--th-card-border); border-radius: 14px; box-shadow: 0 2px 8px var(--th-card-shadow); }
+.status-item dt { margin-bottom: 5px; color: var(--th-text-dim); font-size: 12px; }
+.status-item dd { margin: 0; color: var(--th-text); font-size: 15px; font-weight: 700; overflow-wrap: anywhere; }
+.status-item dd.paused, #homeReviewCount { color: var(--brand-red); }
+
+.home-main { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); align-items: stretch; gap: 16px; }
+.launch-panel, .quick-link, .guide-step { background: var(--th-card-gradient); border: 1px solid var(--th-card-border); box-shadow: 0 2px 8px var(--th-card-shadow); }
+.launch-panel { display: flex; flex-direction: column; min-width: 0; min-height: 306px; padding: clamp(22px, 3vw, 30px); border-left: 4px solid var(--brand-red); border-radius: 16px; }
+.launch-panel h2 { margin: 0 0 9px; font-size: 26px; }
+.launch-panel p { max-width: 420px; margin: 0 0 24px; color: var(--th-text-dim); font-size: 14px; line-height: 1.55; }
+.launch-actions { display: flex; align-items: center; gap: 8px 10px; flex-wrap: wrap; margin-top: auto; }
+.primary-action { display: inline-flex; align-items: center; justify-content: center; min-height: 43px; padding: 10px 16px; border-radius: 8px; background: var(--brand-red); color: #fff; text-decoration: none; font-size: 13px; font-weight: 700; }
+.primary-action:hover { background: var(--brand-red-hover); }
+.text-action { padding: 8px 3px; color: var(--blue-300); font-size: 13px; font-weight: 700; text-decoration: none; }
+.text-action:hover { color: var(--blue-200); text-decoration: underline; }
+
+.card-icon { display: flex; align-items: center; justify-content: center; flex: 0 0 auto; width: 40px; height: 40px; margin-bottom: 14px; border-radius: 10px; }
+.card-icon svg { width: 21px; height: 21px; }
+.launch-panel .card-icon, .quick-link.settings-link .card-icon { color: var(--brand-red); background: rgba(239, 34, 58, .11); }
+.quick-link.dashboard .card-icon { color: var(--blue-400); background: rgba(33, 136, 239, .12); }
+.quick-link.gallery .card-icon { color: var(--blue-300); background: rgba(25, 171, 243, .12); }
+.quick-link.outreach .card-icon { color: var(--blue-200); background: rgba(58, 206, 250, .12); }
+
+.quick-links { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.quick-link { display: flex; flex-direction: column; min-width: 0; min-height: 147px; padding: 17px 19px; border-radius: 16px; color: inherit; text-decoration: none; transition: border-color .2s ease, box-shadow .2s ease, transform .2s ease; }
+.quick-link:hover { border-color: var(--th-raised); box-shadow: 0 10px 28px var(--th-card-shadow); transform: translateY(-2px); }
+.quick-link strong { color: var(--th-text); font-size: 16px; line-height: 1.2; }
+.quick-link .quick-desc { margin-top: 5px; color: var(--th-text-dim); font-size: 12px; line-height: 1.45; }
+.quick-link.settings-link { border-color: rgba(239, 34, 58, .45); }
+
+.guide { margin-top: 36px; }
+.section-title { margin: 0 0 16px; padding-bottom: 12px; border-bottom: 1px solid var(--th-border-subtle); color: var(--th-text-dim); font: 400 12px/1.3 'Twilio Sans Mono', monospace; letter-spacing: 1px; text-transform: uppercase; }
+.guide-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 0; padding: 0; list-style: none; }
+.guide-step { display: flex; gap: 12px; min-width: 0; padding: 18px; border-radius: 14px; }
+.step-num { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; width: 24px; height: 24px; border-radius: 50%; background: rgba(239, 34, 58, .1); color: var(--brand-red); font-size: 12px; font-weight: 700; }
+.guide-step strong { display: block; margin-bottom: 5px; color: var(--th-text); font-size: 13px; line-height: 1.3; }
+.guide-step span:last-child { color: var(--th-text-dim); font-size: 12px; line-height: 1.5; }
+.home-foot { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 38px; padding: 20px 0 0; border-top: 1px solid var(--th-border-subtle); color: var(--th-text-muted); font-size: 12px; }
+.home-foot a { color: var(--th-text-muted); text-decoration: none; }
+.home-foot a:hover { color: var(--th-text-dim); text-decoration: underline; }
+
+a:focus-visible, button:focus-visible { outline: 3px solid var(--blue-300); outline-offset: 3px; }
+@media (max-width: 880px) {
+  .home-main { grid-template-columns: 1fr; }
+  .launch-panel { min-height: 240px; }
+  .quick-link { min-height: 126px; }
+}
+@media (max-width: 620px) {
+  .home-hero { padding-top: 42px; padding-bottom: 25px; }
+  .hero-outline { width: 290px; height: 290px; top: -52px; }
+  .hero-brand { gap: 9px; }
+  .hero-bug { width: 30px; height: 30px; }
+  .event-summary { align-items: start; flex-direction: column; gap: 12px; }
+  .home-demo-badge { align-self: flex-start; }
+  .status-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .guide-list { grid-template-columns: 1fr; }
+}
+@media (max-width: 440px) {
+  .hero-brand { font-size: 23px; }
+  .quick-links { grid-template-columns: 1fr; }
+  .quick-link { display: grid; grid-template-columns: 40px minmax(0, 1fr); grid-template-rows: auto auto; align-content: center; column-gap: 13px; min-height: 87px; padding: 15px; }
+  .quick-link .card-icon { grid-row: 1 / 3; margin: 0; }
+  .quick-link strong { align-self: end; }
+  .quick-link .quick-desc { align-self: start; }
+  .launch-actions { align-items: stretch; }
+  .primary-action { flex-basis: 100%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+}
