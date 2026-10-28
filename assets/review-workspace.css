@@ -1,0 +1,290 @@
+/* Review Queue workspace chrome. Portrait comparison and decision controls
+   retain their existing behavior while the page follows the Twilio admin UI. */
+:root {
+  --review-surface: #111B32;
+  --review-surface-raised: #18243D;
+  --review-border: rgba(221,224,230,.16);
+  --review-muted: #AAB2C5;
+  --review-image-bg: #081224;
+}
+html[data-theme="light"] {
+  --review-surface: #FFFFFF;
+  --review-surface-raised: #F7F8FA;
+  --review-border: #DDE0E6;
+  --review-muted: #4D5777;
+  --review-image-bg: #F3F4F7;
+}
+body { margin: 0; padding: 0; background: var(--th-bg); color: var(--th-text); }
+button, select, textarea { font-family: 'Twilio Sans Text', -apple-system, BlinkMacSystemFont, system-ui, sans-serif; }
+
+.review-topbar {
+  position: sticky; top: 0; z-index: 30;
+  background: rgba(0,13,37,.97); border-bottom: 1px solid var(--review-border);
+  box-shadow: 0 8px 24px rgba(0,0,0,.09);
+}
+.review-topbar-inner {
+  display: flex; align-items: center; gap: clamp(20px,3vw,42px);
+  max-width: 1480px; min-height: 68px; margin: 0 auto;
+  padding: 0 clamp(18px,3vw,40px);
+}
+.review-brand {
+  display: inline-flex; align-items: center; gap: 10px; min-width: max-content;
+  text-decoration: none; color: #FFFFFF; font: 17px/1 'Twilio Sans Display', sans-serif;
+  letter-spacing: -.025em;
+}
+.review-brand img { width: 30px; height: 30px; }
+.review-brand strong { font-weight: 800; }
+.review-local-title { color: var(--th-text); font: 800 16px/1.2 'Twilio Sans Display', sans-serif; white-space: nowrap; }
+.review-admin > .site-nav { z-index: 60; }
+.review-topbar--admin { position: relative; top: auto; z-index: 10; }
+.review-topbar--admin .review-topbar-inner { min-height: 56px; }
+.review-global-nav { display: flex; align-items: stretch; align-self: stretch; gap: 4px; }
+.review-global-nav a {
+  display: inline-flex; align-items: center; padding: 0 15px;
+  border-bottom: 3px solid transparent; color: #BABECC;
+  text-decoration: none; font-size: 13px; font-weight: 700;
+}
+.review-global-nav a:hover { color: #FFFFFF; }
+.review-global-nav .is-current { color: #FFFFFF; border-bottom-color: #EF223A; }
+.review-top-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.review-theme-button, .review-settings-link, .review-refresh {
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+  min-height: 36px; padding: 7px 12px; border: 1px solid var(--review-border);
+  border-radius: 8px; background: transparent; color: #DDE0E6;
+  text-decoration: none; cursor: pointer; font-size: 12px; font-weight: 700;
+}
+.review-theme-button svg { width: 15px; height: 15px; }
+.review-theme-button:hover, .review-settings-link:hover { color: #fff; background: rgba(255,255,255,.09); }
+
+.wrap { max-width: 1480px; margin: 0 auto; padding: clamp(24px,3vw,40px); }
+.review-intro { display: flex; justify-content: space-between; align-items: flex-end; gap: 24px; margin-bottom: 27px; }
+.review-eyebrow {
+  display: block; margin-bottom: 8px; color: #F83D53;
+  font: 700 11px/1.4 'Twilio Sans Mono', monospace; text-transform: uppercase; letter-spacing: .12em;
+}
+.review-intro h1 {
+  color: var(--th-text); font: 800 clamp(29px,3.3vw,42px)/1.1 'Twilio Sans Display', sans-serif;
+  letter-spacing: -.04em;
+}
+.review-intro p { margin-top: 9px; color: var(--th-text-muted); font-size: 14px; line-height: 1.5; }
+.review-total {
+  display: flex; flex-direction: column; align-items: flex-end; min-width: 160px;
+  padding: 11px 0 2px 20px; border-left: 3px solid #EF223A;
+}
+.review-total strong { color: var(--th-text); font: 800 35px/1 'Twilio Sans Display', sans-serif; letter-spacing: -.04em; }
+.review-total span { margin-top: 5px; color: var(--th-text-muted); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; }
+
+.review-toolbar {
+  position: sticky; top: 68px; z-index: 20;
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  min-height: 66px; margin-bottom: 16px; padding: 11px 16px;
+  border: 1px solid var(--review-border); border-radius: 11px;
+  background: var(--review-surface); box-shadow: 0 4px 16px rgba(0,0,0,.08);
+}
+.review-admin .review-toolbar { top: 78px; }
+.review-event-filter { display: inline-flex; align-items: center; gap: 9px; color: var(--review-muted); font-size: 12px; font-weight: 700; }
+.review-event-filter select {
+  min-width: 190px; max-width: 260px; min-height: 38px; padding: 7px 33px 7px 11px;
+  border: 1px solid var(--review-border); border-radius: 7px;
+  background: var(--review-surface-raised); color: var(--th-text); font-size: 12px; cursor: pointer;
+}
+.review-live { display: inline-flex; align-items: center; gap: 7px; color: var(--review-muted); font-size: 12px; font-weight: 700; margin-left: auto; }
+.review-live .status-dot { margin: 0; background: #37B78B; animation: none; }
+.review-live.is-offline .status-dot { background: #EF223A; }
+.review-refresh { color: var(--th-text); background: var(--review-surface-raised); }
+.review-refresh:hover { border-color: #19ABF3; color: var(--th-text); }
+.review-select-page {
+  display: inline-flex; align-items: center; gap: 7px; min-height: 38px;
+  padding-left: 13px; border-left: 1px solid var(--review-border);
+  color: var(--th-text-dim); font-size: 12px; font-weight: 700; cursor: pointer;
+}
+.review-select-page input { width: 17px; height: 17px; accent-color: #1866EE; cursor: pointer; }
+.review-select-page input:disabled { cursor: default; opacity: .45; }
+.offline-bar { border-radius: 8px; margin-bottom: 14px; }
+
+.rv-bulk-bar {
+  margin-bottom: 16px; padding: 12px 15px; border-radius: 9px;
+  background: #17305B; border-color: rgba(33,136,239,.36);
+}
+.rv-bulk-count { color: #FFFFFF; font-size: 12px; }
+.rv-bulk-actions .rv-btn { width: auto; min-height: 34px; padding: 7px 12px; }
+.review-grid {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr));
+  gap: 18px; align-items: start;
+}
+.rv-card {
+  padding: 15px; border-radius: 12px; text-align: left;
+  background: var(--review-surface); border: 1px solid var(--review-border);
+  box-shadow: 0 5px 18px rgba(0,0,0,.08);
+  transition: border-color .18s, box-shadow .18s, transform .18s;
+}
+.rv-card:hover { border-color: rgba(25,171,243,.55); box-shadow: 0 10px 26px rgba(0,0,0,.13); transform: translateY(-2px); }
+.rv-card.rv-selected { border-color: #2188EF; box-shadow: 0 0 0 2px rgba(33,136,239,.23); }
+.rv-card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 26px; margin-bottom: 12px; padding-left: 25px; }
+.rv-multi .rv-card-head { padding-left: 0; }
+.rv-card-event {
+  overflow: hidden; max-width: 66%; padding: 4px 7px; border-radius: 5px;
+  background: rgba(239,34,58,.11); color: #FF8896;
+  font-size: 10px; font-weight: 700; white-space: nowrap; text-overflow: ellipsis;
+}
+.rv-card-age { color: var(--review-muted); font: 11px/1 'Twilio Sans Mono', monospace; white-space: nowrap; }
+.rv-card-check { top: 19px; left: 16px; width: 17px; height: 17px; accent-color: #1866EE; }
+.rv-images { gap: 8px; margin-bottom: 12px; }
+.rv-img-wrap { overflow: hidden; border: 1px solid var(--review-border); border-radius: 8px; background: var(--review-image-bg); }
+.rv-image-open {
+  display: block; width: 100%; height: 100%; margin: 0; padding: 0; border: 0;
+  border-radius: inherit; background: transparent; color: inherit;
+  cursor: pointer; text-align: inherit;
+}
+.rv-image-open:focus-visible { outline: 3px solid #19ABF3; outline-offset: -3px; }
+.rv-images img { display: block; width: 100%; aspect-ratio: 4 / 5; object-fit: contain; background: var(--review-image-bg); }
+.rv-img-wrap img:hover { filter: brightness(1.08); }
+.rv-images .rv-img-label { bottom: 6px; padding: 3px 6px; font-size: 9px; border-radius: 4px; }
+.rv-meta { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin: 0 0 15px; color: var(--review-muted); font-size: 11px; }
+.rv-meta strong { color: var(--th-text); font-size: 12px; font-weight: 700; }
+.rv-meta span { white-space: nowrap; }
+.rv-actions { gap: 8px; }
+.rv-btn { min-height: 36px; border-radius: 7px; box-shadow: none; font-family: 'Twilio Sans Text', sans-serif; }
+.rv-btn:hover { transform: none; box-shadow: none; }
+.rv-btn-approve, .rv-v-send, .rv-modal-approve { background: #1866EE; color: #FFFFFF; }
+.rv-btn-approve:hover, .rv-v-send:hover:not(:disabled), .rv-modal-approve:hover:not(:disabled) { background: #0E3E92; }
+.rv-reject-row { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+.rv-reject-row .rv-btn { min-height: 34px; font-size: 11px; padding: 7px 9px; }
+.rv-reject-row .rv-btn-notify { grid-column: 1 / -1; }
+.rv-btn-reject { color: #FF8896; border-color: rgba(239,34,58,.4); }
+.rv-btn-reject:hover { color: #FFB9C1; border-color: #EF223A; }
+.rv-btn-notify, .rv-btn-reanalyze, .rv-v-regen { border-color: var(--review-border); color: var(--th-text-dim); }
+.rv-feedback { margin-top: 11px; }
+.rv-feedback textarea { min-height: 88px; border-radius: 7px; padding: 10px; }
+.rv-feedback-hint { margin: 6px 0 9px; font-size: 11px; line-height: 1.4; }
+.rv-feedback-btns .rv-btn { min-height: 34px; }
+
+.rv-card.rv-multi { grid-column: span 2; }
+.rv-multi .rv-orig-row { gap: 13px; margin-bottom: 13px; }
+.rv-multi .rv-orig-wrap { flex-basis: 25%; max-width: 25%; }
+.rv-multi .rv-orig-wrap img { aspect-ratio: 4 / 5; object-fit: contain; border: 1px solid var(--review-border); border-radius: 8px; background: var(--review-image-bg); }
+.rv-multi .rv-variant-row { gap: 9px; }
+.rv-variant .rv-v-imgwrap { aspect-ratio: 4 / 5; border: 1px solid var(--review-border); border-radius: 8px; }
+.rv-variant .rv-v-imgwrap img { object-fit: contain; background: var(--review-image-bg); }
+.rv-variant .rv-v-imgwrap .rv-image-open { height: 100%; }
+.rv-v-send, .rv-v-regen { min-height: 33px; border-radius: 7px; }
+.rv-multi .rv-card-actions { gap: 8px; margin-top: 13px; padding-top: 13px; }
+.rv-multi .rv-card-actions .rv-btn { min-height: 34px; padding: 8px 10px; font-size: 11px; }
+.rv-multi .rv-card-actions .rv-btn-reject { color: #FF8896; }
+.rv-card-actions-toggle { display: none; }
+.rv-carousel-nav { display: none; }
+
+.empty {
+  margin: 18px 0; padding: clamp(55px,7vw,92px) 24px;
+  border: 1px dashed var(--review-border); border-radius: 12px;
+  background: var(--review-surface); color: var(--th-text-muted);
+}
+.empty-icon {
+  display: grid; place-items: center; width: 56px; height: 56px;
+  margin: 0 auto 18px; border-radius: 50%; background: rgba(55,183,139,.12);
+  color: #37B78B; font-size: 25px; opacity: 1;
+}
+.empty h2 { color: var(--th-text); font: 800 22px/1.2 'Twilio Sans Display', sans-serif; margin-bottom: 7px; }
+.empty p { font-size: 13px; line-height: 1.5; }
+.review-pagination {
+  display: none; justify-content: space-between; align-items: center; gap: 16px;
+  margin-top: 22px; padding: 16px 0 4px; border-top: 1px solid var(--review-border);
+  color: var(--review-muted); font-size: 12px;
+}
+.review-pagination.visible { display: flex; }
+.review-page-actions { display: flex; gap: 8px; }
+.review-page-actions button {
+  min-height: 36px; padding: 7px 13px; border: 1px solid var(--review-border);
+  border-radius: 7px; background: var(--review-surface); color: var(--th-text);
+  font-size: 12px; font-weight: 700; cursor: pointer;
+}
+.review-page-actions button:hover:not(:disabled) { border-color: #19ABF3; }
+.review-page-actions button:disabled { opacity: .4; cursor: default; }
+
+.rv-modal { background: rgba(0,8,24,.9); }
+.rv-modal-content { max-height: min(90vh, 900px); }
+.rv-modal-pane img { object-fit: contain; background: #081224; }
+.rv-modal-label { color: #DDE0E6; font-size: 11px; }
+.rv-modal-close { width: 38px; height: 38px; }
+.toast { max-width: min(90vw, 540px); }
+
+html[data-theme="light"] .review-topbar { background: rgba(255,255,255,.97); }
+html[data-theme="light"] .review-brand { color: #000D25; }
+html[data-theme="light"] .review-global-nav a { color: #4D5777; }
+html[data-theme="light"] .review-global-nav a:hover,
+html[data-theme="light"] .review-global-nav .is-current { color: #000D25; }
+html[data-theme="light"] .review-theme-button,
+html[data-theme="light"] .review-settings-link { color: #38425E; }
+html[data-theme="light"] .review-theme-button:hover,
+html[data-theme="light"] .review-settings-link:hover { background: #F3F4F7; color: #000D25; }
+html[data-theme="light"] .rv-card-event { color: #B10F23; background: #FFF1F3; }
+html[data-theme="light"] .rv-btn-reject,
+html[data-theme="light"] .rv-multi .rv-card-actions .rv-btn-reject { color: #B10F23; }
+html[data-theme="light"] .rv-btn-reject:hover { color: #880B19; }
+html[data-theme="light"] .rv-bulk-bar { background: #E4F7FF; border-color: #9ADFF7; }
+html[data-theme="light"] .rv-bulk-count { color: #0E3E92; }
+
+.review-topbar a:focus-visible, .review-topbar button:focus-visible,
+.review-toolbar select:focus-visible, .review-toolbar button:focus-visible,
+.review-toolbar input:focus-visible, .rv-card button:focus-visible,
+.rv-card input:focus-visible, .rv-card textarea:focus-visible,
+.review-page-actions button:focus-visible, .rv-modal button:focus-visible {
+  outline: 3px solid #19ABF3; outline-offset: 2px;
+}
+
+@media (max-width: 1120px) {
+  .review-grid { grid-template-columns: repeat(auto-fill, minmax(min(100%, 270px), 1fr)); }
+  .rv-card.rv-multi { grid-column: span 1; }
+  .rv-multi .rv-orig-wrap { flex-basis: 26%; max-width: 26%; }
+  .rv-multi .rv-variant-row { gap: 5px; }
+}
+@media (max-width: 760px) {
+  .review-topbar-inner { min-height: 60px; gap: 12px; padding: 0 16px; }
+  .review-brand span { display: none; }
+  .review-global-nav { gap: 0; }
+  .review-global-nav a { padding: 0 9px; font-size: 12px; }
+  .review-top-actions { gap: 5px; }
+  .review-top-actions span { display: none; }
+  .review-theme-button, .review-settings-link { min-height: 34px; padding: 6px 8px; }
+  .wrap { padding: 22px 16px 32px; }
+  .review-intro { align-items: flex-start; gap: 12px; margin-bottom: 18px; }
+  .review-intro p { font-size: 12px; }
+  .review-total { min-width: 92px; padding-left: 11px; }
+  .review-total strong { font-size: 28px; }
+  .review-total span { font-size: 9px; }
+  .review-toolbar { top: 60px; gap: 9px; padding: 10px; }
+  .review-event-filter { flex: 1; min-width: 0; }
+  .review-event-filter select { flex: 1; min-width: 0; max-width: 100%; }
+  .review-live { margin-left: 0; }
+  .review-select-page { padding-left: 9px; }
+  .review-grid { grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr)); gap: 12px; }
+  .rv-multi .rv-orig-row { flex-direction: column; }
+  .rv-multi .rv-orig-wrap { flex-basis: auto; max-width: 100%; }
+  .rv-multi .rv-orig-wrap img { max-height: 220px; }
+}
+@media (max-width: 600px) {
+  .rv-multi .rv-variant-row { display: block; }
+  .rv-multi .rv-card-actions { display: none; }
+  .rv-multi.actions-open .rv-card-actions { display: flex; }
+  .rv-carousel-nav { display: flex; }
+  .rv-card-actions-toggle { display: block; }
+}
+@media (max-width: 480px) {
+  .review-topbar-inner { gap: 5px; }
+  .review-global-nav a { padding: 0 6px; font-size: 11px; }
+  .review-settings-link { font-size: 11px; }
+  .review-intro { display: block; }
+  .review-total { align-items: flex-start; margin-top: 16px; padding: 9px 0 0 12px; border-left-width: 2px; }
+  .review-total strong { font-size: 24px; }
+  .review-toolbar { position: static; }
+  .review-event-filter { flex-basis: 100%; }
+  .review-live { margin-right: auto; }
+  .review-refresh { min-height: 34px; }
+  .review-select-page { min-height: 34px; }
+  .rv-bulk-actions { margin-left: 0; }
+  .review-pagination { align-items: flex-start; flex-direction: column; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .rv-card, .rv-btn, .rv-modal-approve { transition: none; }
+  .rv-card:hover { transform: none; }
+}

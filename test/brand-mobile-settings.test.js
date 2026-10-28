@@ -14,7 +14,7 @@ test("mobile Settings reflects whether Unbranded is offered", () => {
         type() { return this; },
         send(html) { this.html = html; },
     };
-    routes["/settings"]({}, response);
+    routes["/settings"]({ headers: {} }, response);
 
     const script = [...response.html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)]
         .map((match) => match[1])

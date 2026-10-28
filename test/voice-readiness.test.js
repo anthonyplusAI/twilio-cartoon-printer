@@ -1,44 +1,75 @@
 const { test, before, after } = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
+const os = require("node:os");
 const path = require("node:path");
+const Module = require("node:module");
 const express = require("express");
 const { once } = require("node:events");
 
 const { readinessIssues } = require("../lib/voice/readiness");
-const settings = require("../lib/settings");
-const { buildSettingsHtml } = require("../lib/home");
-const { mountDashboard } = require("../lib/dashboard");
-
-const settingsFile = path.join(__dirname, "..", "data", "settings.json");
-const profileFile = path.join(__dirname, "..", "data", "events", "default", "settings.json");
-const otherEvent = "Voice Readiness Other Event";
-const otherProfileFile = path.join(__dirname, "..", "data", "events", otherEvent, "settings.json");
-const originals = new Map();
+const projectRoot = path.join(__dirname, "..");
+const homePath = path.join(projectRoot, "lib", "home.js");
+const dashboardPath = path.join(projectRoot, "lib", "dashboard.js");
+const otherEvent = `Voice Readiness Other Event ${process.pid}`;
 const originalBaseUrl = process.env.BASE_URL;
-let otherDownloadExisted = false;
+let fixtureRoot;
+let settings;
+let buildSettingsHtml;
+let mountDashboard;
+let originalLoad;
 
 before(() => {
-    for (const file of [settingsFile, profileFile, otherProfileFile]) {
-        originals.set(file, fs.existsSync(file) ? fs.readFileSync(file) : null);
+    // The Voice settings checks need a real settings module, but they must not
+    // read or rewrite the operator's active event profile or credentials.
+    fixtureRoot = fs.mkdtempSync(path.join(os.tmpdir(), "voice-readiness-"));
+    const fixtureLib = path.join(fixtureRoot, "lib");
+    fs.mkdirSync(path.join(fixtureLib, "voice"), { recursive: true });
+    fs.mkdirSync(path.join(fixtureRoot, "data", "events", "default"), { recursive: true });
+    fs.mkdirSync(path.join(fixtureRoot, "templates"), { recursive: true });
+    for (const file of ["settings.js", "styles.js"]) {
+        fs.copyFileSync(path.join(projectRoot, "lib", file), path.join(fixtureLib, file));
     }
-    otherDownloadExisted = fs.existsSync(settings.getDownloadDir(otherEvent));
+    fs.copyFileSync(path.join(projectRoot, "lib", "voice", "readiness.js"),
+        path.join(fixtureLib, "voice", "readiness.js"));
+    fs.symlinkSync(path.join(projectRoot, "node_modules"), path.join(fixtureRoot, "node_modules"), "dir");
+    fs.writeFileSync(path.join(fixtureRoot, "data", "settings.json"), JSON.stringify({ eventName: "default" }));
+    fs.writeFileSync(path.join(fixtureRoot, "data", "events", "default", "settings.json"), "{}");
+
     process.env.BASE_URL = "https://booth.example";
+    settings = require(path.join(fixtureLib, "settings.js"));
     settings.load();
+
+    const config = Object.fromEntries(["pending", "generating", "review", "ready", "printing", "done", "failed"]
+        .map((name) => [`${name.toUpperCase()}_DIR`, path.join(fixtureRoot, "queue", name)]));
+    for (const dir of Object.values(config)) fs.mkdirSync(dir, { recursive: true });
+    const auth = { userBarSnippet: () => "", magicHatSnippet: () => "", themeToggleButton: () => "" };
+    const dashboardUnused = new Set([
+        "./queue", "./pipeline", "./audit", "./leads", "./contacts", "./kiosk-submissions",
+        "./nps", "./print-relay", "./dub", "./share-clicks", "./relay-jobs", "./event-summary",
+        "./openai-models",
+    ]);
+    originalLoad = Module._load;
+    Module._load = function(request, parent, isMain) {
+        if (parent?.filename.startsWith(path.join(projectRoot, "lib") + path.sep)) {
+            if (request === "./settings" || request === "../settings") return settings;
+            if (request === "./auth") return auth;
+        }
+        if (parent?.filename === dashboardPath) {
+            if (request === "./config") return config;
+            if (dashboardUnused.has(request)) return {};
+        }
+        return originalLoad.call(this, request, parent, isMain);
+    };
+    ({ buildSettingsHtml } = require(homePath));
+    ({ mountDashboard } = require(dashboardPath));
 });
 
 after(() => {
-    for (const [file, bytes] of originals) {
-        if (bytes === null) fs.rmSync(file, { force: true });
-        else fs.writeFileSync(file, bytes);
-    }
-    const otherProfileDir = path.dirname(otherProfileFile);
-    if (fs.existsSync(otherProfileDir) && fs.readdirSync(otherProfileDir).length === 0) {
-        fs.rmdirSync(otherProfileDir);
-    }
-    if (!otherDownloadExisted) {
-        fs.rmSync(settings.getDownloadDir(otherEvent), { recursive: true, force: true });
-    }
+    if (originalLoad) Module._load = originalLoad;
+    delete require.cache[homePath];
+    delete require.cache[dashboardPath];
+    if (fixtureRoot) fs.rmSync(fixtureRoot, { recursive: true, force: true });
     if (originalBaseUrl === undefined) delete process.env.BASE_URL;
     else process.env.BASE_URL = originalBaseUrl;
 });
@@ -107,6 +138,7 @@ test("changing the Voice number retains its old invitation binding until the app
 });
 
 test("settings rejects Voice plus before-survey atomically and keeps Voice event-scoped", () => {
+    const startingEvent = settings.get("eventName");
     settings.update({ ...ready, enableVoice: false });
     assert.throws(() => settings.update({ enableVoice: true, leadCaptureMode: "before" }), /Voice.*lead capture/);
     assert.equal(settings.get("enableVoice"), false);
@@ -118,7 +150,7 @@ test("settings rejects Voice plus before-survey atomically and keeps Voice event
     settings.update({ eventName: otherEvent });
     assert.equal(settings.get("enableVoice"), false);
     assert.equal(settings.get("twilioVoiceNumber"), "+14155550100");
-    settings.update({ eventName: "default" });
+    settings.update({ eventName: startingEvent });
     assert.equal(settings.get("enableVoice"), true);
     settings.update({ enableVoice: false });
 });

@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <script>(function(){var t=localStorage.getItem('twilio-theme')||'dark';document.documentElement.setAttribute('data-theme',t)})()</script>
+  <link rel="icon" type="image/svg+xml" href="/assets/icon-twilio-bug-red.svg">
+  <link rel="stylesheet" href="/assets/twilio-brand.css">
+  <link rel="stylesheet" href="/assets/tw-modal.css">
+  <link rel="stylesheet" href="/assets/outreach-workspace.css">
+  <!--SITE_NAV_STYLESHEET-->
+  <script defer src="/assets/tw-modal.js"></script>
+  <script defer src="/assets/outreach-workspace.js"></script>
+  <title>Outreach — Twilio Photobooth</title>
+</head>
+<body>
+  <div class="outreach-shell">
+    <!--SITE_NAV-->
+    <div class="review-notify" id="reviewNotify" hidden>
+      <span id="reviewNotifyText"></span>
+      <a href="/dashboard/">Open review queue</a>
+    </div>
+
+    <header class="workspace-header">
+      <div class="workspace-brand"><h1>Outreach</h1></div>
+      <div class="workspace-tools">
+        <label class="event-picker" for="evSel"><span>Event</span><select id="evSel" aria-label="Choose an event"><option>Loading events…</option></select></label>
+        <button class="header-link theme-button" id="themeButton" type="button" aria-label="Switch color theme">Theme</button>
+      </div>
+    </header>
+
+    <nav class="workspace-nav" role="tablist" aria-label="Outreach views">
+      <button type="button" role="tab" id="tab-messaging" aria-controls="view-messaging" aria-selected="true" data-view="messaging"><span>Messaging</span><small>Recipients and raffle</small></button>
+      <button type="button" role="tab" id="tab-leads" aria-controls="view-leads" aria-selected="false" tabindex="-1" data-view="leads"><span>Leads</span><small>Captured contacts</small></button>
+      <button type="button" role="tab" id="tab-kiosk" aria-controls="view-kiosk" aria-selected="false" tabindex="-1" data-view="kiosk"><span>Kiosk</span><small>Portrait follow-up</small></button>
+      <button type="button" role="tab" id="tab-followups" aria-controls="view-followups" aria-selected="false" tabindex="-1" data-view="followups"><span>Follow-ups</span><small>Unfinished visits</small></button>
+    </nav>
+
+    <main>
+      <section class="workspace-view" id="view-messaging" role="tabpanel" aria-labelledby="tab-messaging">
+        <div class="view-intro"><div><h2>Message attendees</h2><p>Find recipients, send a message, or draw a winner from everyone in the event.</p></div><span class="view-count" id="usersCount">Loading recipients…</span></div>
+        <div class="message-layout">
+          <section class="surface recipient-surface" aria-labelledby="recipientTitle">
+            <div class="surface-head"><div><h3 id="recipientTitle">Recipients</h3><p>Recent portraits first</p></div><span class="selection-status" id="selectionStatus" aria-live="polite">None selected</span></div>
+            <div class="list-toolbar">
+              <label class="search-field"><span class="sr-only">Search recipients</span><input id="search-users" type="search" placeholder="Search name, phone, or style" autocomplete="off"></label>
+              <label class="select-page"><input id="selAll" type="checkbox"> Select page</label>
+              <button type="button" class="text-danger" id="deleteSelectedButton" hidden>Delete selected</button>
+            </div>
+            <div id="userList" class="recipient-list" role="list" aria-live="polite"><div class="list-state">Loading recipients…</div></div>
+            <div class="pager" id="pager-users"></div>
+          </section>
+          <aside class="message-rail">
+            <section class="surface compose-surface" aria-labelledby="composeTitle">
+              <div class="surface-head"><div><h3 id="composeTitle">Compose message</h3><p>Sent to selected recipients only</p></div></div>
+              <label class="sr-only" for="msgBox">Message</label>
+              <textarea id="msgBox" rows="5" placeholder="Write the message you want attendees to receive"></textarea>
+              <div class="compose-meta"><span id="charCount">0 characters</span><span>160 characters per SMS segment</span></div>
+              <button type="button" class="primary-button" id="sendButton" disabled>Select recipients to send</button>
+              <div class="action-result" id="sendResult" role="status" hidden></div>
+            </section>
+            <section class="surface raffle-surface" aria-labelledby="raffleTitle">
+              <div class="surface-head"><div><h3 id="raffleTitle">Raffle</h3><p>Every eligible attendee has a chance</p></div></div>
+              <button type="button" class="secondary-button" id="drawButton" disabled>Draw a winner</button>
+              <div class="raffle-result" id="raffleDisplay" role="status" hidden></div>
+              <div class="history-heading"><h4>Recent winners</h4><span id="winnerCount"></span></div>
+              <div class="winner-list" id="winnerList"><div class="list-state">Loading winners…</div></div>
+            </section>
+          </aside>
+        </div>
+      </section>
+
+      <section class="workspace-view" id="view-leads" role="tabpanel" aria-labelledby="tab-leads" hidden>
+        <div class="view-intro"><div><h2>Captured leads</h2><p>Review contact details and export the full event report.</p></div><span class="view-count" id="leadsCount">Load this view to see leads</span></div>
+        <section class="surface data-surface" aria-labelledby="leadsTitle">
+          <div class="surface-head"><div><h3 id="leadsTitle">Lead directory</h3><p>Most recently completed first</p></div><div class="surface-actions"><button type="button" class="secondary-button" id="exportButton">Download CSV</button><button type="button" class="text-danger" id="deleteLeadsButton">Delete all leads</button></div></div>
+          <div class="list-toolbar"><label class="search-field"><span class="sr-only">Search leads</span><input id="search-leads" type="search" placeholder="Search name, email, company, or title" autocomplete="off"></label></div>
+          <div class="table-scroll"><table class="data-table"><thead><tr><th>Name</th><th>Work email</th><th>Personal email</th><th>Company</th><th>Title</th><th>Country</th></tr></thead><tbody id="leadTableBody"><tr><td colspan="6" class="table-state">Open Leads to load contacts</td></tr></tbody></table></div>
+          <div class="pager" id="pager-leads"></div>
+        </section>
+      </section>
+
+      <section class="workspace-view" id="view-kiosk" role="tabpanel" aria-labelledby="tab-kiosk" hidden>
+        <div class="view-intro"><div><h2>Kiosk submissions</h2><p>Check portrait delivery details. Edit an email address or mark a manual follow-up complete.</p></div><span class="view-count" id="kioskCount">Load this view to see submissions</span></div>
+        <section class="surface data-surface" aria-labelledby="kioskTitle">
+          <div class="surface-head"><div><h3 id="kioskTitle">Portrait contacts</h3><p>Edits save when you leave the email field</p></div></div>
+          <div class="list-toolbar"><label class="search-field"><span class="sr-only">Search kiosk submissions</span><input id="search-kiosk" type="search" placeholder="Search phone, email, style, or event" autocomplete="off"></label></div>
+          <div class="table-scroll"><table class="data-table kiosk-table"><thead><tr><th>Portrait</th><th>Phone</th><th>Email</th><th>Style</th><th>Submitted</th><th>Emailed</th><th><span class="sr-only">Actions</span></th></tr></thead><tbody id="kioskSubsBody"><tr><td colspan="7" class="table-state">Open Kiosk to load submissions</td></tr></tbody></table></div>
+          <div class="pager" id="pager-kiosk"></div>
+        </section>
+      </section>
+
+      <section class="workspace-view" id="view-followups" role="tabpanel" aria-labelledby="tab-followups" hidden>
+        <div class="view-intro"><div><h2>Follow-ups</h2><p>Attendees who texted in but have no portrait in the active pipeline. Send a nudge or dismiss a visit.</p></div><span class="view-count" id="followupsCount">Load this view to see visits</span></div>
+        <section class="surface data-surface" aria-labelledby="followupsTitle">
+          <div class="surface-head"><div><h3 id="followupsTitle">Unfinished visits</h3><p>Most recent first</p></div></div>
+          <div class="list-toolbar"><label class="search-field"><span class="sr-only">Search follow-ups</span><input id="search-followups" type="search" placeholder="Search phone or event" autocomplete="off"></label></div>
+          <div id="dropoffList" class="followup-list" role="list"><div class="list-state">Open Follow-ups to load visits</div></div>
+          <div class="pager" id="pager-followups"></div>
+        </section>
+      </section>
+    </main>
+
+    <div class="user-menu" id="userMenu" role="menu" hidden><div id="userMenuLabel" class="user-menu-label"></div><button type="button" role="menuitem" data-scope="photos">Delete photos and jobs</button><button type="button" role="menuitem" data-scope="lead">Delete lead data</button><button type="button" role="menuitem" data-scope="all">Delete all user data</button></div>
+    <footer class="workspace-footer"><span>Lists refresh while this tab is open</span><a href="/home/settings">Settings</a></footer>
+  </div>
+  <!--USER_BAR-->
+  <!--MAGIC_HAT-->
+</body>
+</html>

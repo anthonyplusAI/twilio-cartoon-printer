@@ -1,0 +1,103 @@
+/* Shared admin navigation. Every rule is scoped to the component. */
+.site-nav, .site-nav * { box-sizing: border-box; }
+.site-nav {
+  /* Center one common width even when a page's content wrapper is narrower. */
+  --site-nav-half-width: min(680px, calc(50vw - 16px));
+  position: sticky;
+  top: 8px;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 22px;
+  width: min(1360px, calc(100vw - 32px));
+  min-height: 64px;
+  margin: 0 0 24px;
+  margin-left: calc(50% - var(--site-nav-half-width));
+  padding: 10px 16px;
+  border: 1px solid var(--th-card-border, #38425e);
+  border-radius: 12px;
+  background: var(--th-card, #232b45);
+  box-shadow: 0 2px 12px var(--th-card-shadow, rgba(0, 0, 0, .2));
+  color: var(--th-text, #fff);
+  font-family: 'Twilio Sans Text', system-ui, sans-serif;
+}
+.site-nav .site-nav-brand {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  color: var(--th-text, #fff);
+  font: 800 16px/1.2 'Twilio Sans Display', system-ui, sans-serif;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.site-nav .site-nav-brand img { display: block; flex: 0 0 auto; width: 26px; height: 26px; }
+.site-nav .site-nav-brand:hover { color: var(--th-text, #fff); text-decoration: none; }
+.site-nav .site-nav-links { display: flex; align-items: center; justify-content: flex-end; gap: 2px; min-width: 0; }
+.site-nav .site-nav-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
+  margin: 0;
+  padding: 7px 10px;
+  border-radius: 7px;
+  color: var(--th-text-secondary, #dde0e6);
+  font: 700 12px/1.25 'Twilio Sans Text', system-ui, sans-serif;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.site-nav .site-nav-link:hover { background: var(--th-raised, #38425e); color: var(--th-text, #fff); text-decoration: none; }
+.site-nav .site-nav-link.is-active,
+.site-nav .site-nav-link[aria-current="page"] { background: rgba(239, 34, 58, .14); color: var(--brand-red, #ef223a); }
+.site-nav .site-nav-link.is-active:hover { background: rgba(239, 34, 58, .2); }
+.site-nav .site-nav-mobile { display: none; }
+.site-nav a:focus-visible, .site-nav summary:focus-visible { outline: 2px solid var(--blue-300, #19abf3); outline-offset: 2px; }
+@media (max-width: 1050px) {
+  .site-nav { gap: 12px; }
+  .site-nav .site-nav-links { display: none; }
+  .site-nav .site-nav-mobile { display: block; flex: 0 0 auto; margin-left: auto; }
+  .site-nav .site-nav-mobile summary {
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+    min-height: 38px;
+    padding: 7px 11px;
+    border: 1px solid var(--th-card-border, #38425e);
+    border-radius: 7px;
+    color: var(--th-text, #fff);
+    background: var(--th-bg-subtle, #080c18);
+    font: 700 12px/1.25 'Twilio Sans Text', system-ui, sans-serif;
+    cursor: pointer;
+    list-style: none;
+  }
+  .site-nav .site-nav-mobile summary::-webkit-details-marker { display: none; }
+  .site-nav .site-nav-current { color: var(--brand-red, #ef223a); }
+  .site-nav .site-nav-chevron { width: 7px; height: 7px; margin-top: -3px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(45deg); }
+  .site-nav .site-nav-mobile[open] .site-nav-chevron { margin-top: 3px; transform: rotate(225deg); }
+  .site-nav .site-nav-mobile nav {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    display: grid;
+    gap: 2px;
+    width: min(280px, calc(100vw - 32px));
+    padding: 8px;
+    border: 1px solid var(--th-card-border, #38425e);
+    border-radius: 10px;
+    background: var(--th-card, #232b45);
+    box-shadow: 0 18px 36px var(--th-card-shadow, rgba(0, 0, 0, .35));
+  }
+  .site-nav .site-nav-mobile .site-nav-link { justify-content: flex-start; min-height: 41px; padding: 9px 12px; font-size: 13px; }
+}
+@media (max-width: 400px) {
+  .site-nav { padding: 9px 11px; }
+  .site-nav .site-nav-brand { font-size: 14px; }
+  .site-nav .site-nav-brand img { width: 23px; height: 23px; }
+  .site-nav .site-nav-mobile summary { gap: 6px; padding: 7px 8px; }
+  .site-nav .site-nav-current { display: none; }
+}

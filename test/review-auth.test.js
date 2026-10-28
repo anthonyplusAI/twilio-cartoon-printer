@@ -3,6 +3,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const express = require("express");
+const sharp = require("sharp");
 
 const TEST_SESSION_SECRET = "review-auth-test-session-secret-32-chars";
 const EVENT = "__review_auth_test__";
@@ -229,4 +230,56 @@ test("staged media accepts review or admin sessions while approved media stays p
 
     const reviewPageAsset = await fetch(`${baseUrl}/assets/twilio-brand.css`);
     assert.equal(reviewPageAsset.status, 200);
+});
+
+test("review queue thumbnails require a session and keep originals private", async () => {
+    const output = path.join(stagingDir, "synthetic_output.png");
+    const selfie = path.join(stagingDir, "synthetic_input.jpg");
+    await sharp({ create: { width: 1400, height: 900, channels: 3, background: "#336699" } }).png().toFile(output);
+    await sharp({ create: { width: 900, height: 1400, channels: 3, background: "#aa3366" } }).jpeg().toFile(selfie);
+    try {
+        const outputPath = `/review/api/thumbnail/${EVENT}/synthetic_output.png`;
+        const selfiePath = `/review/api/thumbnail/${EVENT}/synthetic_input.jpg`;
+        assert.equal((await fetch(`${baseUrl}${outputPath}`)).status, 401);
+
+        const login = await reviewLogin(runtimeSettings.reviewPin, "192.0.2.49");
+        const headers = { cookie: cookiePair(login, "review_token") };
+        const outputResponse = await fetch(`${baseUrl}${outputPath}`, { headers });
+        assert.equal(outputResponse.status, 200);
+        assert.match(outputResponse.headers.get("content-type"), /^image\/webp/);
+        assert.equal(outputResponse.headers.get("cache-control"), "private, max-age=0, must-revalidate");
+        const firstMeta = await sharp(Buffer.from(await outputResponse.arrayBuffer())).metadata();
+        assert.ok(firstMeta.width <= 480);
+
+        // A regenerated output may reuse the same filename. Its thumbnail
+        // must reflect the new file instead of the prior 60-second cache entry.
+        await sharp({ create: { width: 900, height: 1400, channels: 3, background: "#663399" } }).png().toFile(output);
+        const refreshed = await fetch(`${baseUrl}${outputPath}`, { headers });
+        const refreshedMeta = await sharp(Buffer.from(await refreshed.arrayBuffer())).metadata();
+        assert.ok(refreshedMeta.width < firstMeta.width);
+
+        const selfieResponse = await fetch(`${baseUrl}${selfiePath}`, { headers });
+        assert.equal(selfieResponse.status, 200);
+        assert.equal(selfieResponse.headers.get("cache-control"), "private, no-store");
+        assert.equal((await fetch(`${baseUrl}/review/api/thumbnail/${EVENT}/%252e%252e%252Fapproved.txt`, { headers })).status, 400);
+    } finally {
+        fs.rmSync(output, { force: true });
+        fs.rmSync(selfie, { force: true });
+    }
+});
+
+test("review event choices use the authenticated current event", async () => {
+    const originalListEvents = settings.listEvents;
+    settings.listEvents = () => [EVENT];
+    try {
+        assert.equal((await fetch(`${baseUrl}/review/api/events`)).status, 401);
+        const login = await reviewLogin(runtimeSettings.reviewPin, "192.0.2.50");
+        const response = await fetch(`${baseUrl}/review/api/events`, {
+            headers: { cookie: cookiePair(login, "review_token") },
+        });
+        assert.equal(response.status, 200);
+        assert.deepEqual(await response.json(), { events: [EVENT], currentEvent: EVENT });
+    } finally {
+        settings.listEvents = originalListEvents;
+    }
 });
