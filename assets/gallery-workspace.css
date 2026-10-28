@@ -426,14 +426,20 @@ html.combo-embedded .count-label strong {
   html.combo-embedded .scene:not(.manage-mode) .count-label {
     margin-top: auto;
     padding: clamp(20px, 3vh, 36px) 16px clamp(6px, 1vh, 12px);
-    font-size: clamp(18px, 1.9vw, 28px);
+    font-size: clamp(20px, 2vw, 28px);
   }
   html.combo-embedded .scene:not(.manage-mode) .count-label strong {
-    font-size: clamp(42px, 5vw, 76px);
+    font-size: clamp(54px, 5vw, 76px);
   }
   html.combo-embedded .scene:not(.manage-mode) .book-area {
     flex: 0 1 auto;
     margin-bottom: auto;
+  }
+  html.combo-embedded .scene:not(.manage-mode) .book-wrap {
+    width: 82vw;
+    height: auto;
+    aspect-ratio: var(--book-ratio, 1.5);
+    max-height: min(60vh, 100%);
   }
 }
 /* In a stacked combo, the fixed vh book height can spill upward over the
