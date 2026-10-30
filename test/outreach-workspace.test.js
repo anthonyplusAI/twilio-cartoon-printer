@@ -33,7 +33,7 @@ test("Outreach preview renderer is independent of live stores and uses deferred 
     new vm.Script(fs.readFileSync(path.join(__dirname, "..", "assets", "outreach-workspace.js"), "utf8"));
 });
 
-function syntheticOutreach({ holdFirstDoneRead = false, holdSecondReadFile = false } = {}) {
+function syntheticOutreach({ holdFirstDoneRead = false, holdSecondReadFile = false, marketingConsent = false } = {}) {
     const routes = { get: new Map(), post: new Map(), delete: new Map() };
     const router = {
         use() {},
@@ -56,6 +56,8 @@ function syntheticOutreach({ holdFirstDoneRead = false, holdSecondReadFile = fal
     const leads = Array.from({ length: 83 }, (_, i) => ({ firstName: `Guest ${i}`, lastName: "Test", phone: `+1415555${String(i).padStart(4, "0")}`, email: `guest${i}@example.test`, company: "Twilio", completedAt: i }));
     const followups = Array.from({ length: 65 }, (_, i) => ({ phone: `+1415777${String(i).padStart(4, "0")}`, eventName: "Event A", firstContactAt: i }));
     let accessCount = 0;
+    let sentMessages = 0;
+    let nudgedContacts = 0;
     let randomBound = 0;
     let now = 1_000_000;
     class SyntheticDate extends Date { static now() { return now; } }
@@ -103,13 +105,18 @@ function syntheticOutreach({ holdFirstDoneRead = false, holdSecondReadFile = fal
         express,
         sharp: () => ({ rotate() { return this; }, resize() { return this; }, webp() { return this; }, toBuffer: async () => Buffer.from("synthetic-image") }),
         "./config": { DONE_DIR: doneDir, PENDING_DIR: "/synthetic/pending", GENERATING_DIR: "/synthetic/generating", REVIEW_DIR: "/synthetic/review", READY_DIR: "/synthetic/ready", PRINTING_DIR: "/synthetic/printing", FAILED_DIR: "/synthetic/failed" },
-        "./settings": { get: (key) => key === "eventName" ? "Event A" : [], getDownloadDir: (event) => `/synthetic/downloads/${event}` },
-        "./messaging": { send: async () => ({}) },
+        "./settings": { get: (key) => key === "eventName" ? "Event A" : [], getForEvent: () => "en", getDownloadDir: (event) => `/synthetic/downloads/${event}` },
+        "./messaging": { send: async () => { sentMessages++; return {}; } },
         "./leads": { getLeadName: (phone) => `Guest ${Number(phone.slice(-4))}`, getLeads: () => leads.slice(), deleteByPhone: () => 1 },
         "./kiosk-submissions": { listByEvent: () => kiosk.slice(), deleteBatch: () => 0 },
-        "./contacts": { getDropOffs: () => followups.slice(), getPreferredChannel: () => "sms", deleteByPhone() {} },
-        "./channels": { ADAPTERS: {} },
-        "./i18n": {},
+        "./contacts": {
+            getDropOffs: () => followups.slice(), getPreferredChannel: () => "sms",
+            getPreferredLocale: () => null,
+            hasMarketingConsent: (_phone, eventName, channel) => marketingConsent && eventName === "Event A" && channel === "sms",
+            markNudged: () => { nudgedContacts++; return true; }, deleteByPhone() {},
+        },
+        "./channels": { ADAPTERS: { sms: { name: "sms", isConfigured: () => true } } },
+        "./i18n": { resolveAttendeeLocale: () => "en", DEFAULT_LOCALE: "en", t: () => "Finish your portrait" },
         "./photogallery": { invalidatePhotoGalleryCache() {} },
         "./queue": { buildUsageCache() {} },
         "./auth": { userBarSnippet: () => "", magicHatSnippet: () => "" },
@@ -147,11 +154,12 @@ function syntheticOutreach({ holdFirstDoneRead = false, holdSecondReadFile = fal
         waitSecondReadStarted: () => secondReadStartedPromise,
         advanceTime: (ms) => { now += ms; },
         get accessCount() { return accessCount; }, get randomBound() { return randomBound; },
+        get sentMessages() { return sentMessages; }, get nudgedContacts() { return nudgedContacts; },
     };
 }
 
 test("cold Outreach send waits for completed jobs before resolving recipients", async () => {
-    const app = syntheticOutreach({ holdFirstDoneRead: true });
+    const app = syntheticOutreach({ holdFirstDoneRead: true, marketingConsent: true });
     const request = app.request("post", "/api/send-message", {
         body: { ids: [1654912861], message: "Event update", event: "Event A" },
     });
@@ -159,6 +167,39 @@ test("cold Outreach send waits for completed jobs before resolving recipients", 
     const result = await request;
     assert.equal(result.status, 200);
     assert.deepEqual(JSON.parse(JSON.stringify(result.payload)), { sent: 1, failed: 0 });
+});
+
+test("Outreach does not send a promotional broadcast to an attendee without consent", async () => {
+    const app = syntheticOutreach();
+    const result = await app.request("post", "/api/send-message", {
+        body: { ids: [1654912861], message: "New offers", event: "Event A" },
+    });
+    assert.equal(result.status, 200);
+    assert.deepEqual(JSON.parse(JSON.stringify(result.payload)), { sent: 0, failed: 1 });
+    assert.equal(app.sentMessages, 0);
+});
+
+test("Outreach nudge requires promotional consent before sending", async () => {
+    const app = syntheticOutreach();
+    const dropOffs = await app.request("get", "/api/drop-offs", { query: { event: "Event A" } });
+    const result = await app.request("post", "/api/nudge", {
+        body: { id: dropOffs.payload[0].id, event: "Event A" },
+    });
+    assert.equal(result.status, 403);
+    assert.equal(app.sentMessages, 0);
+    assert.equal(app.nudgedContacts, 0);
+});
+
+test("Outreach sends a nudge to a consenting attendee on the opted-in channel", async () => {
+    const app = syntheticOutreach({ marketingConsent: true });
+    const dropOffs = await app.request("get", "/api/drop-offs", { query: { event: "Event A" } });
+    const result = await app.request("post", "/api/nudge", {
+        body: { id: dropOffs.payload[0].id, event: "Event A" },
+    });
+    assert.equal(result.status, 200);
+    assert.deepEqual(JSON.parse(JSON.stringify(result.payload)), { ok: true });
+    assert.equal(app.sentMessages, 1);
+    assert.equal(app.nudgedContacts, 1);
 });
 
 test("cold Outreach deletion waits for completed jobs before resolving users", async () => {

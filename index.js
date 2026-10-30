@@ -8,6 +8,8 @@ const bodyParser = require("body-parser");
 const channels = require("./lib/channels");
 const messaging = require("./lib/messaging");
 const { getMessageBody, getNpsScore } = require("./lib/inbound-payload");
+const { handleVerifiedInboundMarketingMessage, marketingOptInText } = require("./lib/marketing-consent");
+const { DEFAULT_FIRST_MESSAGE } = require("./lib/channel-entry");
 const richMenu = require("./lib/rich-menu");
 const contentTemplates = require("./lib/content-templates");
 const languageMenu = require("./lib/language-menu");
@@ -167,6 +169,13 @@ function markSid(sid) {
     return false;
 }
 
+function releaseSid(sid) {
+    if (!sid) return;
+    _processedSids.delete(sid);
+    const index = _sidQueue.indexOf(sid);
+    if (index >= 0) _sidQueue.splice(index, 1);
+}
+
 async function inboundHandler(req, res) {
   try {
     if (!baseUrl) {
@@ -186,6 +195,48 @@ async function inboundHandler(req, res) {
     let body = getMessageBody(req.body);
 
     const eventName = settings.get("eventName");
+    if (handleVerifiedInboundMarketingMessage({
+        phone: userPhone, eventName, channel: inboundAdapter.name,
+        messageSid: req.body.MessageSid, body, optOutType: req.body.OptOutType,
+    }, contacts)) {
+        markSid(req.body.MessageSid);
+        return res.status(204).end();
+    }
+    const consentLanguageMode = settings.getForEvent("languageMode", eventName) || "en";
+    const consentLocale = i18n.resolveAttendeeLocale(consentLanguageMode,
+        contacts.getPreferredLocale(userPhone, eventName));
+    async function replyBeforeConsent(replyBody) {
+        const sid = req.body.MessageSid;
+        if (markSid(sid)) return 204;
+        try {
+            contacts.recordInbound(userPhone, inboundAdapter.name);
+            const sent = await messaging.send(userPhone, "_raw", {}, { _body: replyBody, adapter: inboundAdapter });
+            if (sent && !sent.error && !sent.skipped) return 204;
+            releaseSid(sid);
+            return 502;
+        } catch (err) {
+            releaseSid(sid);
+            throw err;
+        }
+    }
+    if (/^HELP$/i.test(String(body || "").trim()) || String(req.body.OptOutType || "").trim().toUpperCase() === "HELP") {
+        const helpBody = consentLocale === "pt_BR"
+            ? "Para obter ajuda com o retrato, escaneie o QR code do estande ou peça ajuda à equipe. Envie STOP para cancelar."
+            : consentLanguageMode === "ask" && !consentLocale
+                ? "For help with the portrait booth, scan the booth QR code or ask booth staff. Reply STOP to opt out.\n\nPara obter ajuda, escaneie o QR code do estande ou peça ajuda à equipe. Envie STOP para cancelar."
+                : "For help with the portrait booth, scan the booth QR code or ask booth staff. Reply STOP to opt out.";
+        return res.status(await replyBeforeConsent(helpBody)).end();
+    }
+    const attendeeRequiresMarketingConsent = !isAdmin(userPhone) || String(eventName || "").toLowerCase() === "testing";
+    if (attendeeRequiresMarketingConsent && !contacts.hasMarketingConsent(userPhone, eventName, inboundAdapter.name)) {
+        const starter = `${DEFAULT_FIRST_MESSAGE}\n\n${marketingOptInText(inboundAdapter.name)}`;
+        const consentPrompt = consentLocale === "pt_BR"
+            ? `Para começar seu retrato, envie esta mensagem completa de consentimento:\n\n${starter}`
+            : consentLanguageMode === "ask" && !consentLocale
+                ? `To start your portrait, send this complete prefilled consent message.\nPara começar seu retrato, envie esta mensagem completa de consentimento:\n\n${starter}`
+                : `To start your portrait, send this complete prefilled consent message:\n\n${starter}`;
+        return res.status(await replyBeforeConsent(consentPrompt)).end();
+    }
     contacts.recordContact(userPhone, appPhone, eventName);
     const activeStyles = settings.getActiveStyles(eventName);
     const activeStyleList = settings.getActiveStyleList(eventName);
