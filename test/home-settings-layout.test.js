@@ -476,11 +476,11 @@ test("local fixture preview serves sample pages and refuses every write", () => 
     assert.equal(rejected.status, 405);
 });
 
-test("local start preview shows every channel configuration and mandatory consent in both drafts", () => {
+test("local start preview links to SMS and WhatsApp drafts with mandatory consent", () => {
     const server = createPreviewServer();
-    function request(url) {
+    function request(url, headers = {}) {
         const result = {};
-        server.emit("request", { method: "GET", url, headers: {} }, {
+        server.emit("request", { method: "GET", url, headers }, {
             writeHead(status, headers) { result.status = status; result.headers = headers; },
             end(body = "") { result.body = body.toString(); },
         });
@@ -488,30 +488,34 @@ test("local start preview shows every channel configuration and mandatory consen
     }
 
     const sms = request("/start?event=DEMO+EVENT&channels=sms");
+    const iosSms = request("/start?event=DEMO+EVENT&channels=sms", {
+        "user-agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)",
+    });
     const whatsapp = request("/start?event=DEMO+EVENT&channels=whatsapp");
     const both = request("/start?event=DEMO+EVENT&channels=both");
     const notice = request("/start/notice?event=DEMO+EVENT");
     const smsDraft = request("/start/open?event=DEMO+EVENT&channels=sms&channel=sms");
+    const iosSmsDraft = request("/start/open?event=DEMO+EVENT&channels=sms&channel=sms", {
+        "user-agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)",
+    });
     const whatsappDraft = request("/start/open?event=DEMO+EVENT&channels=whatsapp&channel=whatsapp");
+    const prefill = "Hit send to start! 🚀\n\nBy sending this text, I agree to Twilio’s Terms (twil.io/terms) and Privacy Notice (twil.io/privacy) for marketing communications.\n\nMsg & data rates apply.";
 
     assert.equal(sms.status, 200);
-    assert.match(sms.body, /name="channel" value="sms"/);
-    assert.doesNotMatch(sms.body, /name="channel" value="whatsapp"/);
-    assert.match(whatsapp.body, /name="channel" value="whatsapp"/);
-    assert.doesNotMatch(whatsapp.body, /name="channel" value="sms"/);
-    assert.match(both.body, /name="channel" value="sms"/);
-    assert.match(both.body, /name="channel" value="whatsapp"/);
+    assert.match(sms.body, /<a class="channel-button channel-sms" href="sms:/);
+    assert.doesNotMatch(sms.body, /class="channel-button channel-whatsapp"/);
+    assert.match(iosSms.body, /<a class="channel-button channel-sms" href="sms:\+14155550199&amp;body=/);
+    assert.match(whatsapp.body, /<a class="channel-button channel-whatsapp" href="https:\/\/wa\.me\/\?text=/);
+    assert.doesNotMatch(whatsapp.body, /class="channel-button channel-sms"/);
+    assert.match(both.body, /<a class="channel-button channel-sms" href="sms:/);
+    assert.match(both.body, /<a class="channel-button channel-whatsapp" href="https:\/\/wa\.me\/\?text=/);
     assert.match(notice.body, /OpenAI/);
-    for (const draft of [smsDraft, whatsappDraft]) {
-        assert.equal(draft.status, 200);
-        assert.match(draft.body, /Hit send to start! 🚀/);
-        assert.match(draft.body, /By sending this text, I agree to Twilio’s Terms/);
-        assert.match(draft.body, /Privacy Notice \(twil\.io\/privacy\) for marketing communications/);
-        assert.match(draft.body, /Msg &amp; data rates apply/);
-        assert.match(draft.body, /Every starter draft includes the Twilio Terms/);
-        assert.match(draft.body, /Preview only/);
-        assert.equal(draft.headers.Location, undefined);
-    }
+    assert.equal(smsDraft.status, 302);
+    assert.equal(smsDraft.headers.Location, "sms:+14155550199?body=" + encodeURIComponent(prefill));
+    assert.equal(iosSmsDraft.status, 302);
+    assert.equal(iosSmsDraft.headers.Location, "sms:+14155550199&body=" + encodeURIComponent(prefill));
+    assert.equal(whatsappDraft.status, 302);
+    assert.equal(whatsappDraft.headers.Location, "https://wa.me/?text=" + encodeURIComponent(prefill));
 });
 
 test("local fixture panel links to its desktop channel selector preview", async () => {

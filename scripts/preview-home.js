@@ -45,54 +45,10 @@ function previewSetting(key, mode) {
     return fixtureSettings[key];
 }
 
-function buildDraftPreviewHtml({ channel, recipient, body, eventName, locale, mode }) {
-    const channelName = channel === "sms" ? "SMS" : "WhatsApp";
-    const backHref = "/start?" + new URLSearchParams({ event: eventName, lang: locale, channels: mode }).toString();
-    return `<!DOCTYPE html>
-<html lang="en" data-theme="dark">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<script>(function(){var t=localStorage.getItem('twilio-theme')||'dark';document.documentElement.setAttribute('data-theme',t)})()</script>
-<link rel="icon" type="image/svg+xml" href="/assets/icon-twilio-bug-red.svg">
-<link rel="stylesheet" href="/assets/twilio-brand.css">
-<title>${channelName} draft preview — Twilio Photobooth</title>
-<style>
-  * { box-sizing: border-box; }
-  body { min-height: 100vh; margin: 0; background: var(--th-bg, #000D25); color: var(--th-text); }
-  main { width: min(100%, 620px); margin: 0 auto; padding: 40px 22px 70px; }
-  .back { color: var(--blue-300); font-size: 14px; text-underline-offset: 3px; }
-  .badge { display: inline-block; margin: 28px 0 18px; padding: 7px 11px; border: 1px solid var(--th-card-border); border-radius: 999px; color: var(--th-text-secondary); background: var(--th-card); font-size: 12px; font-weight: 700; }
-  h1 { margin: 0 0 12px; font-size: clamp(34px, 8vw, 48px); line-height: 1.08; }
-  .intro { margin: 0 0 28px; color: var(--th-text-dim); font-size: 16px; line-height: 1.5; }
-  .phone { overflow: hidden; border: 1px solid var(--th-card-border); border-radius: 28px; background: var(--th-card); box-shadow: 0 20px 60px var(--th-card-shadow); }
-  .phone-top { padding: 17px 22px; border-bottom: 1px solid var(--th-card-border); text-align: center; font-size: 15px; font-weight: 700; }
-  .to { padding: 14px 20px; border-bottom: 1px solid var(--th-card-border); color: var(--th-text-dim); font-size: 13px; }
-  .to strong { color: var(--th-text); }
-  .conversation { min-height: 260px; display: flex; align-items: flex-end; padding: 28px 18px; }
-  .bubble { max-width: 95%; margin-left: auto; padding: 16px 18px; border-radius: 18px 18px 5px 18px; background: var(--blue-400); color: white; font-size: 15px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
-  .composer { display: flex; gap: 10px; align-items: center; padding: 12px 16px; border-top: 1px solid var(--th-card-border); color: var(--th-text-muted); font-size: 12px; }
-  .composer span { flex: 1; padding: 11px 15px; border: 1px solid var(--th-card-border); border-radius: 999px; }
-  .send { width: 35px; height: 35px; display: grid; place-items: center; border-radius: 50%; background: var(--th-raised); color: var(--th-text-muted); }
-  .note { margin: 18px 0 0; color: var(--th-text-muted); font-size: 13px; line-height: 1.5; }
-</style>
-</head>
-<body>
-<main>
-  <a class="back" href="${escapeHtml(backHref)}">← Back to event start</a>
-  <div><span class="badge">Preview only · no message sent</span></div>
-  <h1>${channelName} message draft</h1>
-  <p class="intro">In the live experience, this opens ${channelName} with the message below. The attendee then taps Send to start.</p>
-  <div class="phone">
-    <div class="phone-top">${channelName}</div>
-    <div class="to">To: <strong>${escapeHtml(recipient)}</strong></div>
-    <div class="conversation"><div class="bubble">${escapeHtml(body)}</div></div>
-    <div class="composer"><span>Message ready to send</span><div class="send" aria-hidden="true">↑</div></div>
-  </div>
-  <p class="note">Every starter draft includes the Twilio Terms, Privacy Notice, and marketing consent text. This preview never opens a messaging app or contacts Twilio.</p>
-</main>
-</body>
-</html>`;
+function previewChannel(channel) {
+    if (channel.id !== "whatsapp" || !channel.href) return channel;
+    const text = new URL(channel.href).searchParams.get("text") || "";
+    return { ...channel, href: `https://wa.me/?text=${encodeURIComponent(text)}` };
 }
 
 const fixtureSettings = Object.freeze({
@@ -300,7 +256,7 @@ function serveAsset(response, pathname) {
 function createPreviewServer() {
     const { buildHomeHtml, buildSettingsHtml, buildStaticPanelHtml } = require("../lib/home");
     const { buildAttendeeStartHtml, buildEventNoticeHtml } = require("../lib/attendee-start");
-    const { buildChannelLaunchPath, buildChannelOptions, resolveEventLocale } = require("../lib/channel-entry");
+    const { buildChannelOptions, resolveEventLocale } = require("../lib/channel-entry");
     const { renderDashboardPage } = require("../lib/dashboard-page");
     const { renderLogsPage } = require("../lib/logs-page");
     const { buildOutreachHtml } = require("../lib/outreach-page");
@@ -352,15 +308,13 @@ function createPreviewServer() {
             const channelMap = buildChannelOptions({ locale, getSetting });
             const channels = [channelMap.sms, channelMap.whatsapp]
                 .filter((channel) => channel.enabled && channel.href)
-                .map((channel) => ({
-                    ...channel,
-                    launchHref: buildChannelLaunchPath(fixtureSettings.eventName, locale, channel.id),
-                }));
+                .map(previewChannel);
             return send(response, 200, buildAttendeeStartHtml({
                 eventName: fixtureSettings.eventName,
                 locale,
                 languageMode: fixtureSettings.languageMode,
                 channels,
+                userAgent: request.headers["user-agent"] || "",
                 legalText: "",
                 termsUrl: "",
                 previewChannels: mode,
@@ -392,19 +346,20 @@ function createPreviewServer() {
             const mode = previewChannelMode(url.searchParams.get("channels"));
             const getSetting = (key) => previewSetting(key, mode);
             const locale = resolveEventLocale(getSetting, url.searchParams.get("lang"));
-            const selected = buildChannelOptions({ locale, getSetting })[channel];
+            const selected = previewChannel(buildChannelOptions({ locale, getSetting })[channel]);
             if (!selected.enabled || !selected.href) {
                 return send(response, 404, "Channel not available.", "text/plain; charset=utf-8");
             }
-            const body = new URL(selected.href).searchParams.get(channel === "sms" ? "body" : "text") || "";
-            return send(response, 200, buildDraftPreviewHtml({
-                channel,
-                recipient: selected.phone,
-                body,
-                eventName: fixtureSettings.eventName,
-                locale,
-                mode,
-            }), "text/html; charset=utf-8");
+            const userAgent = String(request.headers["user-agent"] || "");
+            const destination = channel === "sms" && /iPad|iPhone|iPod|Macintosh.*Mobile/i.test(userAgent)
+                ? selected.iosHref
+                : selected.href;
+            response.writeHead(302, {
+                Location: destination,
+                "Cache-Control": "no-store",
+                "Referrer-Policy": "no-referrer",
+            });
+            return response.end();
         }
         if (pathname === "/dashboard" || pathname === "/dashboard/logs" || pathname === "/outreach" || pathname === "/photogallery") {
             response.writeHead(302, { Location: pathname + "/", "Cache-Control": "no-store" });

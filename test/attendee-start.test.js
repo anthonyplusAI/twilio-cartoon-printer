@@ -77,15 +77,34 @@ test("chooser renders the requested event and locale without leaking settings", 
     assert.match(body, /Crie seu retrato com IA/);
     assert.match(body, /Escolha SMS ou WhatsApp para abrir uma mensagem/);
     assert.match(body, /Idioma da página:/);
-    assert.match(body, /<form[^>]+action="\/start\/open"[^>]+method="get"/);
+    assert.doesNotMatch(body, /<form[^>]+action="\/start\/open"/);
     assert.doesNotMatch(body, /name="marketing"|marketing-opt-in|Opcional\. Você ainda pode receber/);
-    assert.match(body, /name="channel"[^>]+value="sms"/);
-    assert.match(body, /name="channel"[^>]+value="whatsapp"/);
+    assert.equal(
+        body.match(/<a class="channel-button channel-sms" href="([^"]+)"/)?.[1],
+        "sms:+5511999990000?body=" + ENCODED_FIRST_MESSAGE,
+    );
+    assert.equal(
+        body.match(/<a class="channel-button channel-whatsapp" href="([^"]+)"/)?.[1],
+        "https://wa.me/5511988880000?text=" + ENCODED_FIRST_MESSAGE,
+    );
     assert.doesNotMatch(body, /carry=1/);
     assert.doesNotMatch(body, /&lt;script&gt;alert\(&#39;no&#39;\)&lt;\/script&gt;/);
     assert.doesNotMatch(body, /javascript:alert|must-not-leak|Archived Event/);
     const scripts = [...body.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/g)].map((match) => match[1]);
     for (const script of scripts) assert.doesNotThrow(() => new vm.Script(script));
+});
+
+test("iPhone chooser links directly to an iOS SMS draft", async () => {
+    const response = await fetch(`${baseUrl}/start?event=Active+Event&lang=en`, {
+        headers: { "user-agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)" },
+    });
+    const body = await response.text();
+
+    assert.equal(response.status, 200);
+    assert.equal(
+        body.match(/<a class="channel-button channel-sms" href="([^"]+)"/)?.[1],
+        "sms:+5511999990000&amp;body=" + ENCODED_FIRST_MESSAGE,
+    );
 });
 
 test("launch route revalidates the event and adapts SMS links for iOS", async () => {

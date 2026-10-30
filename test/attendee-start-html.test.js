@@ -35,10 +35,10 @@ test("the start page presents the photo notice and launches SMS without a market
     assert.match(html, /The photo you send is shared with OpenAI for image checks, analysis, and portrait generation\./);
     assert.doesNotMatch(html, /remain in event storage|until staff deletes|theme-control/i);
     assert.match(html, /href="\/start\/notice\?event=Demo&amp;lang=en"/);
-    assert.match(html, /<form[^>]+action="\/start\/open"[^>]+method="get"/);
+    assert.doesNotMatch(html, /<form[^>]+action="\/start\/open"/);
     assert.doesNotMatch(html, /marketing-choice|marketing-opt-in|Optional\. You can still get your portrait without this/);
-    assert.match(html, /<button[^>]+name="channel"[^>]+value="sms"/);
-    assert.doesNotMatch(html, /<button[^>]+name="channel"[^>]+value="whatsapp"/);
+    assert.match(html, /<a class="channel-button channel-sms" href="sms:\+14155550111\?body=ready"/);
+    assert.doesNotMatch(html, /class="channel-button channel-whatsapp"/);
 });
 
 test("the full notice follows the supplied event terms and approved photo disclosures", () => {
