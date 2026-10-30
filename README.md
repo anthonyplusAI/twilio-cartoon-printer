@@ -63,7 +63,7 @@ flowchart TB
   R --> P2
 ```
 
-After sending a selfie, users usually receive a numbered style menu and reply with a number or style name. If only one style is active, or the caption already names a known style, the menu is skipped. The bot can also respond conversationally to questions with AI. All user-facing SMS copy is configurable from the admin Settings page (`/home/settings`) at runtime.
+After sending a selfie, users usually receive a numbered style menu and reply with a number or style name. If only one style is active, or the caption already names a known style, the menu is skipped. The bot can also respond conversationally to questions with AI. The app's outgoing SMS messages are configurable from the admin Settings page (`/home/settings`) at runtime; the fixed legal block in the attendee's starter draft is added automatically.
 
 ## Resources
 
@@ -392,6 +392,8 @@ Both the Print Station app and CLI relay share these capabilities:
 | `/home/settings` | Settings -- event, portrait, delivery, booth display, messaging, and advanced configuration |
 | `/home/video` | Fullscreen looping intro video for booth displays |
 | `/home/panel` | Static instruction page with QR code, steps, and Twilio branding |
+| `/start` | Public attendee page with SMS/WhatsApp buttons above data and OpenAI photo disclosures and a participation-terms link |
+| `/start/notice` | Public participation terms linked from the attendee page |
 | `/home/combo` | Split-screen booth display (video or static page + photo book) |
 | `/home/break` | "We'll Be Right Back" screen for booth breaks |
 | `/photogallery` | Photo book with page-turn animations |
@@ -418,14 +420,15 @@ Both the Print Station app and CLI relay share these capabilities:
 - **Configurable SMS messages** -- every message editable from the Settings page, with `{variable}` interpolation
 - **Lead capture** -- SMS survey (before or after portrait) with configurable fields, toggles, and CSV export
 - **NPS survey** -- 1-5 rating after last portrait, with dashboard stats and PDF report integration
-- **Booth display modes** -- video (looping intro), static instruction page (QR code + steps with Twilio branding), or none (photo book only)
+- **Booth display modes** -- static instruction page (the new-event default), video (looping intro), or none (photo book only)
+- **Attendee QR flow** -- auto-generated booth QRs open `/start` first, including single-channel events. The **Continue with SMS** and/or **Continue with WhatsApp** buttons sit directly under the heading, followed by short data-collection and OpenAI photo disclosures and a link to the [participation terms](docs/GUIDE.md#channel-selector). Tapping a button opens a draft; the attendee still taps Send. The default draft begins `Hit send to start! 🚀` and always includes the fixed Terms, Privacy Notice, and marketing enrollment text. Custom opening text gets the same fixed block. Uploaded QR images can point elsewhere and should be checked separately. In Ask mode, attendees without a saved chat language choose one after sending the draft.
 - **BRB screen** -- "We'll Be Right Back" overlay on all booth displays
 - **Social sharing** -- branded share page with OG meta tags, per-platform share buttons (X/Twitter, LinkedIn, Instagram), dub.co URL shortening with custom domains, personalized titles via lead capture data
 - **Import style prompts** -- copy style prompt overrides from one event to another
 - **Per-event settings** -- save and restore creative and operational settings profiles per event
 - **Runtime settings** -- edit event settings at `/home/settings`; supply connection secrets through deployment configuration or local `.env`
 - **Dashboard** -- job health, failure breakdown, combined jobs panel (failed + completed with filter tabs), queue status, NPS scores, stuck job alerts, PDF reports
-- **Outreach** -- broadcast SMS, animated raffle draws, lead reports
+- **Outreach** -- consent-gated broadcast messaging, animated raffle draws, lead reports
 - **Photo book** -- realistic page-turn gallery for booth displays
 - **Immediate digital delivery** -- in Print + Digital mode, users get their portrait via SMS immediately after generation instead of waiting for the print to finish
 - **Printer failure resilience** -- jobs track which printers failed them and smart dispatch routes retries to different printers; operators can disable/enable printers from the dashboard (works for both local and relay printers)

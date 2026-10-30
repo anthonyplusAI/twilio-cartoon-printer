@@ -12,6 +12,7 @@ This document covers all features and configuration in depth. For quick setup, s
   - [Home Page](#home-page)
   - [Get Started Video](#get-started-video)
   - [Static Instruction Page](#static-instruction-page)
+  - [Channel Selector](#channel-selector)
   - [Booth Display](#booth-display)
   - [Photo Book](#photo-book)
 - [Admin Dashboard](#admin-dashboard)
@@ -77,7 +78,7 @@ This document covers all features and configuration in depth. For quick setup, s
 | `PRINT_QUALITY` | No | Print resolution. Options: `standard` (360 DPI), `high` (720 DPI), `max` (1440 DPI). Defaults to `high`. |
 | `PICKUP_LOCATION` | No | Name shown in physical print pickup messages. Runtime setting overrides this value; blank uses `Twilio booth` in English or `estande da Twilio` in Portuguese. |
 | `CUSTOM_PRINT_FLAGS` | No | Additional raw flags appended to the `lp` command. For non-Epson printers or advanced CUPS options (e.g. `-o MediaType=Glossy`). |
-| `PROMO_MESSAGE` | No | Promotional message sent as a standalone SMS after each portrait delivery. Leave blank to disable. |
+| `PROMO_MESSAGE` | No | Optional replacement for the new-event promotional message. The promo can be disabled in Settings. |
 | `PRINT_RELAY_KEY` | No | Shared secret for the print relay agent. Set it in deployment configuration (or local `.env`) to enable cloud-to-local printing; it cannot be entered in the Settings page. See [Print Relay](#print-relay-cloud-printing). |
 | `PRINT_RELAY_URL` | No | Cloud app URL for the relay agent (used by the local script only, not the server). |
 | `PRINT_RELAY_PRINTER` | No | Override printer name for the relay agent (default: auto-detect). |
@@ -179,6 +180,8 @@ Current mounted routes:
 | `/` | Admin | Redirects to `/home` |
 | `/home` | Admin | Operator home, event status, booth display launcher, and links to tools |
 | `/home/settings` | Admin | Event, portrait, delivery, booth display, messaging, and advanced settings |
+| `/start` | Public | Attendee start page opened by auto-generated booth QRs for one or both channels |
+| `/start/notice` | Public | Full participation terms linked from the start page |
 | `/dashboard` | Admin | Monitoring, review, retry/reprint, printer controls, reports |
 | `/outreach` | Admin | Broadcasts, raffles, lead reports, drop-off nudges |
 | `/photogallery` | Public GET, admin mutations | Public booth photo book and admin photo actions |
@@ -213,15 +216,49 @@ The intro video at `/home/video` is a fullscreen looping video player designed t
 
 The static page at `/home/panel` is a branded instruction panel designed for booth monitors. It displays a QR code, numbered steps, and configurable text -- all with Twilio typography (Display Extrabold headlines, Text body copy, Mono step numbers) and draft line accents.
 
-Configure from `/home/settings` > **Booth display** when the display mode is set to "Static Page":
+New events start in **Static Page** mode. Configure it from `/home/settings` > **Booth display**:
 
 - **Headline** -- large text at the top (e.g. "Get Your AI Portrait")
 - **Subline** -- smaller text below the headline (e.g. event name)
-- **QR Code** -- uploadable image that attendees scan to start
+- **QR Code** -- automatically generated from the enabled messaging channels; attendees scan it to start
 - **Steps 1-3** -- numbered instructions shown below the QR code
-- **Legal Text** -- small compliance text at the bottom
+- **Legal Text** -- optional additional text shown on the instruction page and full participation terms
 
-The page includes BRB and Fullscreen buttons. When no QR code is uploaded, a placeholder message is shown.
+The page includes BRB and Fullscreen buttons. Each channel needs a usable sender number for an automatic QR code, or an uploaded QR image as a fallback. An uploaded QR may lead outside this app and bypass the attendee start page; scan each uploaded image to verify its destination.
+
+### Channel Selector
+
+Auto-generated booth QRs open the public `/start` page first. The **Continue with SMS** and/or **Continue with WhatsApp** buttons appear directly below the heading and intro. Below the buttons, **About this experience** states that Twilio receives the attendee's phone number and photo, may collect their name, email, and country if the event asks, and shares the photo with OpenAI for image checks, analysis, and portrait generation. A **Read participation terms** link opens `/start/notice`. The page has no marketing checkbox. The footer reads, `By continuing, you agree to the participation terms.` The full notice's **Terms of Service** section retains its separate 18-or-older clause.
+
+The full participation terms have six sections: **Privacy Notice**, **Marketing Enrollment**, **AI Portrait Generation**, **Data Collection**, **Photo Retention**, and **Terms of Service**. **Marketing Enrollment** describes enrollment for everyone who sends the starter message. The terms link Twilio's Privacy Notice and Terms. **Legal Text** adds a separate event-specific section; a configured **Terms URL** adds an additional event-terms link when it differs from Twilio's Terms URL.
+
+The **Photo Retention** section promises that the original photo is kept only as long as needed to generate the portrait and deleted following the event. This is an operator commitment: V1 does not enforce that retention limit or automatically delete photos when the event ends. Staff need a cleanup process before live use; `/home/settings` > **Reset & data** > **Clear event data** provides a manual event-data deletion action.
+
+The channel buttons match the event setup:
+
+| Enabled channels | What the attendee sees after scanning |
+|---|---|
+| SMS only | **Continue with SMS**, then the notice and terms link |
+| WhatsApp only | **Continue with WhatsApp**, then the notice and terms link |
+| Both | Both buttons, then the notice and terms link |
+
+Tapping a button opens the matching messaging app with a draft. It does **not** send the message. The attendee taps **Send** there, then sends a selfie. The default draft on both channels is:
+
+```text
+Hit send to start! 🚀
+
+By sending this text, I agree to Twilio’s Terms (twil.io/terms) and Privacy Notice (twil.io/privacy) for marketing communications.
+
+Msg & data rates apply.
+```
+
+The legal block is included in every SMS and WhatsApp starter draft. Marketing enrollment is recorded after the app receives the sent statement from the Twilio sender. For this QR flow, the attendee taps **Send** to start. Until a sender has recorded enrollment for the current event and channel, a direct message or a draft with the consent block removed receives a request to send the required starter. The app waits to ask for a chat language or process a photo until that starter is received.
+
+Edit the SMS and WhatsApp **Pre-fill message** fields separately at `/home/settings` > **Booth Display** > **SMS** or **WhatsApp**, with **Static Page** selected. These fields set the opening text; the app adds the fixed Terms, Privacy Notice, and marketing block automatically, including when the opening text is custom. Previously saved built-in starter messages are upgraded to the current default when settings load. Other custom opening text is retained.
+
+In **Ask** language mode, links on `/start` change the page language. An attendee without a saved language preference is asked to choose a **chat** language after sending the starter. A configured single-language event does not ask that question.
+
+When both channels use auto-generated QRs and have usable booth numbers, the panel shows one shared QR. An explicitly uploaded QR appears in a separate labeled slot; mixed setups pair it with an auto-generated QR labeled **Scan to choose SMS or WhatsApp**. Auto-generated QRs open `/start`; uploaded images may bypass it. A channel with neither a usable number nor an uploaded QR is omitted.
 
 ### Booth Display
 
@@ -334,9 +371,9 @@ Styles automatically appear in SMS messages and are available for users to selec
 
 ## Multi-Subject Photos
 
-By default, **Multi-Subject Photos** is set to reject group photos. If scene analysis detects more than one primary human subject, the app sends the configurable `multiSubjectReject` message and refunds the user's usage count.
+New events set **Multi-Subject Photos** to **Normal**, so group photos are generated as usual. Scene analysis counts the primary people and pets so the prompt can preserve the intended subject count.
 
-Change the Multi-Subject Photos mode from **Portrait** > **Styles & Art** when an event should allow multiple people in one portrait. Scene analysis still counts the primary subjects and pets so the prompt can preserve the intended subject count.
+Change the mode under **Portrait** > **Styles & Art** to **Reject** when an event needs solo selfies. In that mode, a photo with multiple primary human subjects gets the configurable `multiSubjectReject` message and its usage count is refunded.
 
 ## Branding
 
@@ -649,7 +686,7 @@ Features:
 
 - **User directory** -- lists every attendee who has generated an image, with masked phone numbers, print counts, art styles used, and time since last activity
 - **Event filtering** -- dropdown to filter users by event, matching the dashboard's event selector
-- **Broadcast messaging** -- select individual users or "Select All", compose a message, and send SMS to all selected recipients at once
+- **Broadcast messaging** -- select individual users or "Select All" and compose a message; sends only to attendees with recorded marketing consent for their event and channel
 - **Raffle system** -- "Draw Winner" button with an animated random selection that highlights users in sequence before landing on a winner. Winners are automatically persisted to `data/raffle.json` and marked with a trophy icon in the user list
 - **Raffle history** -- scrollable list of past raffle winners with timestamps, persisted across server restarts
 - **Lead Capture** -- panel showing captured leads for the selected event with a CSV download button for exporting lead data
@@ -773,15 +810,35 @@ The break message is configurable from `/home/settings` > **Booth display** > **
 
 ## Promotional Messages
 
-The app can send a promotional message as a standalone SMS after each portrait is delivered. The promo is always the last message in the conversation for each portrait -- it arrives a few seconds after the completion MMS, separate from all status messages.
+The app can send a standalone promotional message over the attendee's messaging channel after portrait delivery. It is scheduled shortly after delivery, separate from the portrait and status messages.
 
-The promo is sent after every portrait completion (including repeat users). Admins are excluded. If the promo message field is empty, no promo is sent.
+The promo is eligible after each portrait completion, including repeat users, only when that attendee has a recorded marketing opt-in for the current event and channel. Admin shortcuts are excluded. New events enable the promo with this message:
 
-Configure the message from `/home/settings` > **Messaging** > **Promotional**. Set `PROMO_MESSAGE` in `.env` to configure a default, or leave blank to disable.
+> Had fun? ⭐ Star the repo and build your own AI photo booth! https://github.com/anthonyplusAI/twilio-cartoon-printer
+
+Configure or turn off the promo from `/home/settings` > **Messaging** > **Promotional**. `PROMO_MESSAGE` in `.env` can replace the default text; leaving the message field empty prevents a promo from being sent.
 
 ## Runtime Settings
 
 Open the Settings page at `/home/settings` from Home. It lets admins change creative and operational settings at runtime. Click **Save changes** to apply edits; the page sends only changed fields. Saved values take effect immediately. Overrides persist to `data/settings.json`; per-event values also persist to the active event profile. The search field finds settings across the page.
+
+### Defaults for new events
+
+Newly created events start with these values. Existing event profiles keep their other settings; previously saved built-in starter messages are upgraded to the current default shown above. The SMS and WhatsApp first-message fields contain the opening line; the fixed legal block is added when the draft is created.
+
+| Setting | New-event value |
+|---------|-----------------|
+| Frame Border | Off; no extra inset between the portrait and template |
+| Multi-Subject Photos | Normal |
+| Review Mode | Off |
+| Booth Display Mode | Static Page |
+| SMS first message | `Hit send to start! 🚀` |
+| WhatsApp first message | `Hit send to start! 🚀` |
+| Milestone Celebrations | On, every 10 portraits |
+| Reveal Animation | Pixel (blur-in) |
+| Social Sharing | On |
+| SMS Share Page Only | Off; include the MMS image |
+| Promotional Message | On, with the repo invitation shown above; sent only to attendees with recorded marketing enrollment |
 
 The navigation has six sections:
 
@@ -792,7 +849,7 @@ The navigation has six sections:
 - **Messaging** -- Configure lead capture, promotional messages, NPS, SMS copy, and social sharing. See [Lead Capture](#lead-capture) for details.
 - **Advanced** -- View credential status; configure admin phone numbers, Twilio sender and Messaging Service IDs, Content Template SIDs, OpenAI model choices, and dub.co short-link options.
 
-**Reset & data** is separate from the six settings sections. **Reset settings** restores event and display defaults while keeping connection credentials and the Review PIN configured. **Clear event data** deletes generated data for the active event after confirmation; it does not reset settings or the audit history.
+**Reset & data** is separate from the six settings sections. **Reset settings** restores event and display defaults while keeping connection credentials and the Review PIN configured. **Clear event data** deletes jobs, generated images, leads, contacts, and kiosk submissions for the active event after confirmation; it does not reset settings or the audit history. This is manual cleanup, not an automatic retention policy.
 
 OpenAI, Twilio auth, and print relay secrets are status-only in **Advanced**; the OpenAI key may show its last four characters. Change these secrets in deployment configuration (or local `.env`), not in the browser. Replace or remove the Review PIN at `/review/settings`. The dub.co key can be replaced with a write-only action in **Advanced** only when no deployment-managed `DUB_API_KEY` is set. Other settings are overrides on top of `.env` defaults. See [Switching Events](#switching-events) for the explicit event-switch flow.
 

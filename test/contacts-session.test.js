@@ -15,6 +15,11 @@ process.env.DATA_DIR = tmpDir;
 // Clear require cache so DATA_DIR is picked up fresh
 delete require.cache[require.resolve("../lib/contacts")];
 const contacts = require("../lib/contacts");
+const { handleVerifiedInboundMarketingMessage } = require("../lib/marketing-consent");
+const MARKETING_COPY = "By sending this text, I agree to Twilio’s Terms (twil.io/terms) and Privacy Notice (twil.io/privacy) for marketing communications.\n\nMsg & data rates apply.";
+const LEGACY_SMS_COPY = "I agree to receive recurring automated promotional SMS messages from Twilio at this number. "
+    + "Message frequency varies. Msg & data rates may apply. Reply STOP to opt out or HELP for help. "
+    + "Terms: twil.io/terms Privacy: twil.io/privacy.";
 
 test("recordInbound: sets lastInboundAt on first call", () => {
     const before = Date.now();
@@ -151,4 +156,90 @@ test("markNudged: sets nudgedAt on existing contact", () => {
 test("markNudged: returns false for unknown contact", () => {
     const result = contacts.markNudged("+19999990000", "unknown-event");
     assert.equal(result, false);
+});
+
+test("marketing consent defaults to false for an attendee with no opt-in", () => {
+    assert.equal(contacts.hasMarketingConsent("+14155550101", "Event A", "sms"), false);
+});
+
+test("sent marketing opt-in is stored with inbound message evidence", () => {
+    const phone = "+14155550102";
+    const copy = MARKETING_COPY;
+    const body = `Hit send to start! 🚀\n\n${copy}`;
+    assert.equal(contacts.recordMarketingOptIn({
+        phone, eventName: "Event A", channel: "sms", messageSid: "SMconsent001", body, receivedAt: 1000,
+    }), true);
+    assert.equal(contacts.hasMarketingConsent(phone, "Event A", "sms"), true);
+    assert.equal(contacts.hasMarketingConsent(phone, "Event B", "sms"), false);
+    assert.equal(contacts.hasMarketingConsent(phone, "Event A", "whatsapp"), false);
+    assert.deepEqual(contacts.getMarketingConsent(phone, "Event A", "sms"), {
+        phone, eventName: "Event A", channel: "sms", messageSid: "SMconsent001",
+        consentedAt: 1000, body, copy, method: "inbound_message", revokedAt: null,
+    });
+});
+
+test("legacy opt-in evidence retains the exact consent copy that was sent", () => {
+    const phone = "+14155550109";
+    const body = `Hit send to start! 🚀\n\n${LEGACY_SMS_COPY}`;
+    assert.equal(contacts.recordMarketingOptIn({
+        phone, eventName: "Event A", channel: "sms", messageSid: "SMlegacy001", body, receivedAt: 1001,
+    }), true);
+    assert.equal(contacts.getMarketingConsent(phone, "Event A", "sms").copy, LEGACY_SMS_COPY);
+});
+
+test("STOP revokes every event on the inbound channel but preserves the other channel", () => {
+    const phone = "+14155550103";
+    const smsCopy = MARKETING_COPY;
+    const whatsappCopy = MARKETING_COPY;
+    contacts.recordMarketingOptIn({ phone, eventName: "Event A", channel: "sms", messageSid: "SMconsentA", body: smsCopy, receivedAt: 1000 });
+    contacts.recordMarketingOptIn({ phone, eventName: "Event B", channel: "sms", messageSid: "SMconsentB", body: smsCopy, receivedAt: 1001 });
+    contacts.recordMarketingOptIn({ phone, eventName: "Event A", channel: "whatsapp", messageSid: "SMconsentWA", body: whatsappCopy, receivedAt: 1002 });
+
+    assert.equal(contacts.revokeMarketingConsent({ phone, channel: "sms", eventName: "Event B", messageSid: "SMstop", body: "STOP", receivedAt: 2000 }), 2);
+    assert.equal(contacts.hasMarketingConsent(phone, "Event A", "sms"), false);
+    assert.equal(contacts.hasMarketingConsent(phone, "Event B", "sms"), false);
+    assert.equal(contacts.hasMarketingConsent(phone, "Event A", "whatsapp"), true);
+    assert.equal(contacts.getMarketingConsent(phone, "Event A", "sms").revokedAt, 2000);
+    assert.equal(contacts.getMarketingConsent(phone, "Event A", "sms").revocationMessageSid, "SMstop");
+    assert.equal(contacts.getMarketingConsent(phone, "Event A", "sms").revocationBody, "STOP");
+});
+
+test("a generic START after STOP does not restore marketing consent", () => {
+    const phone = "+14155550104";
+    const copy = MARKETING_COPY;
+    const inbound = { phone, eventName: "Event A", channel: "sms" };
+    assert.equal(handleVerifiedInboundMarketingMessage({ ...inbound, messageSid: "SMopt", body: copy }, contacts), false);
+    assert.equal(contacts.hasMarketingConsent(phone, "Event A", "sms"), true);
+    assert.equal(handleVerifiedInboundMarketingMessage({ ...inbound, messageSid: "SMstop2", body: "STOP" }, contacts), true);
+    assert.equal(contacts.hasMarketingConsent(phone, "Event A", "sms"), false);
+    assert.equal(handleVerifiedInboundMarketingMessage({ ...inbound, messageSid: "SMstart", body: "START" }, contacts), false);
+    assert.equal(contacts.hasMarketingConsent(phone, "Event A", "sms"), false);
+});
+
+test("one inbound MessageSid cannot opt a person into two events on webhook retry", () => {
+    const phone = "+14155550105";
+    const body = MARKETING_COPY;
+    const inbound = { phone, channel: "sms", messageSid: "SMretry001", body, receivedAt: 3000 };
+    assert.equal(contacts.recordMarketingOptIn({ ...inbound, eventName: "Event A" }), true);
+    assert.equal(contacts.recordMarketingOptIn({ ...inbound, eventName: "Event B" }), false);
+    assert.equal(contacts.hasMarketingConsent(phone, "Event B", "sms"), false);
+});
+
+test("marketing consent evidence is not shown as an unfinished attendee", () => {
+    const phone = "+14155550107";
+    const body = MARKETING_COPY;
+    contacts.recordMarketingOptIn({ phone, eventName: "Consent Only", channel: "sms", messageSid: "SMconsentOnly", body });
+    assert.deepEqual(contacts.getDropOffs("Consent Only", [], []), []);
+});
+
+test("phone deletion removes marketing consent for the selected scope", () => {
+    const phone = "+14155550108";
+    const body = MARKETING_COPY;
+    contacts.recordMarketingOptIn({ phone, eventName: "Event A", channel: "sms", messageSid: "SMdeleteA", body });
+    contacts.recordMarketingOptIn({ phone, eventName: "Event B", channel: "sms", messageSid: "SMdeleteB", body });
+    contacts.deleteByPhone(phone, "Event A");
+    assert.equal(contacts.getMarketingConsent(phone, "Event A", "sms"), null);
+    assert.equal(contacts.hasMarketingConsent(phone, "Event B", "sms"), true);
+    contacts.deleteByPhone(phone);
+    assert.equal(contacts.getMarketingConsent(phone, "Event B", "sms"), null);
 });

@@ -1,8 +1,11 @@
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
 const vm = require("node:vm");
-const { buildHomeHtml, buildSettingsHtml } = require("../lib/home");
+const { buildHomeHtml, buildSettingsHtml, buildComboHtml, localizeDisplayHtml } = require("../lib/home");
+const settings = require("../lib/settings");
 const { createPreviewServer } = require("../scripts/preview-home");
+
+const FIRST_MESSAGE = "Hit send to start! 🚀";
 
 function settingsScript() {
     const html = buildSettingsHtml();
@@ -12,6 +15,133 @@ function settingsScript() {
     assert.ok(script);
     return script;
 }
+
+function populatedSettingsFields(settingsValues = {}) {
+    const script = settingsScript();
+    const populate = script.slice(script.indexOf("function populateSettings()"), script.indexOf("function fillSelect("));
+    const elements = new Map();
+    function field(id) {
+        if (!elements.has(id)) elements.set(id, { value: "", checked: false, textContent: "", style: {} });
+        return elements.get(id);
+    }
+    const noop = () => {};
+    const context = {
+        document: { getElementById: field },
+        _settings: settingsValues,
+        _files: {},
+        _promptDefaults: {},
+        _msgDefaults: {},
+    };
+    for (const name of [
+        "renderVoiceReadiness", "setModelValue", "validateSlugPrefix", "renderStaffQr", "setReviewMode",
+        "setDeliveryMode", "setLeadTiming", "toggleMultiSubjectReject", "renderBrandRefLibrary",
+        "renderBrands", "renderBackgroundChoices", "renderPrinterChecklist", "initializeTemplateSelections",
+        "fillSelect", "updateTemplatePreview", "updateVideoPreview", "toggleBoothMode", "renderBoothSteps",
+        "toggleBoothSmsQr", "toggleBoothWhatsappQr", "toggleBoothSmsQrSource",
+        "toggleBoothWhatsappQrSource", "renderPhoneTags", "renderBrandRefs", "renderBgMessagesPreview",
+        "renderBrandMessagesPreview", "renderLeadFields", "renderStyles",
+    ]) context[name] = noop;
+    vm.createContext(context);
+    vm.runInContext(populate, context);
+    context.populateSettings();
+    return field;
+}
+
+test("new event settings show the requested booth and engagement defaults", () => {
+    const field = populatedSettingsFields();
+    assert.equal(field("frameBorderToggle").checked, false);
+    assert.equal(field("sMultiSubjectMode").value, "normal");
+    assert.equal(field("sReviewMode").value, "off");
+    assert.equal(field("sBoothMode").value, "static");
+    assert.equal(field("sBoothSmsText").value, FIRST_MESSAGE);
+    assert.equal(field("sBoothWhatsappPrefill").value, FIRST_MESSAGE);
+    assert.equal(field("sMilestoneInterval").value, 10);
+    assert.equal(field("sRevealAnimation").value, "pixel");
+    assert.equal(field("shareToggle").checked, true);
+    assert.equal(field("sharePageOnlyToggle").checked, false);
+    assert.equal(field("promoToggle").checked, true);
+    assert.equal(field("sPromoMessage").value, "Had fun? ⭐ Star the repo and build your own AI photo booth! https://github.com/anthonyplusAI/twilio-cartoon-printer");
+});
+
+test("existing event choices remain unchanged when populated", () => {
+    const field = populatedSettingsFields({
+        enableFrameBorder: true,
+        multiSubjectMode: "reject",
+        reviewMode: "human",
+        boothDisplayMode: "video",
+        boothSmsInstructionText: "Start SMS\nwith a photo",
+        boothWhatsappPrefillText: "Start WhatsApp\nwith a photo",
+        milestoneInterval: 100,
+        revealAnimation: "off",
+        enableShareLinks: false,
+        sharePageOnly: true,
+        enablePromoMessage: false,
+        promoMessage: "",
+    });
+    assert.equal(field("frameBorderToggle").checked, true);
+    assert.equal(field("sMultiSubjectMode").value, "reject");
+    assert.equal(field("sReviewMode").value, "human");
+    assert.equal(field("sBoothMode").value, "video");
+    assert.equal(field("sBoothSmsText").value, "Start SMS\nwith a photo");
+    assert.equal(field("sBoothWhatsappPrefill").value, "Start WhatsApp\nwith a photo");
+    assert.equal(field("sMilestoneInterval").value, 100);
+    assert.equal(field("sRevealAnimation").value, "off");
+    assert.equal(field("shareToggle").checked, false);
+    assert.equal(field("sharePageOnlyToggle").checked, true);
+    assert.equal(field("promoToggle").checked, false);
+    assert.equal(field("sPromoMessage").value, "");
+});
+
+test("Settings initial controls and QR guidance match new event behavior", () => {
+    const html = buildSettingsHtml();
+    const input = (id) => html.match(new RegExp(`<input[^>]*id="${id}"[^>]*>`))[0];
+    assert.doesNotMatch(input("frameBorderToggle"), /\schecked(?:\s|>)/);
+    assert.match(input("sMilestoneInterval"), /value="10"/);
+    assert.match(input("promoToggle"), /\schecked(?:\s|>)/);
+    assert.match(input("shareToggle"), /\schecked(?:\s|>)/);
+    assert.doesNotMatch(input("sharePageOnlyToggle"), /\schecked(?:\s|>)/);
+    assert.match(html, /<option value="static" selected>Static Page<\/option>/);
+    assert.match(html, /<option value="pixel" selected>Pixel \(blur-in\)<\/option>/);
+    for (const id of ["sBoothSmsText", "sBoothWhatsappPrefill"]) {
+        const textarea = html.match(new RegExp('<textarea[^>]*id="' + id + '"[^>]*>([\\s\\S]*?)<\\/textarea>'));
+        assert.ok(textarea, id + " is a multiline textarea");
+        assert.equal(textarea[1], FIRST_MESSAGE.replace(/&/g, "&amp;"));
+    }
+    assert.match(html, /automatically appends Twilio’s Terms, Privacy Notice, and marketing consent text to each SMS starter message/);
+    assert.match(html, /automatically appends Twilio’s Terms, Privacy Notice, and marketing consent text to each WhatsApp starter message/);
+    assert.doesNotMatch(html, /guest checks the optional choice on the start page/);
+    assert.match(html, /id="sPromoMessage"[^>]*>Had fun\? ⭐ Star the repo and build your own AI photo booth! https:\/\/github\.com\/anthonyplusAI\/twilio-cartoon-printer<\/textarea>/);
+    assert.equal([...html.matchAll(/<option value="auto">Auto-generate \(attendee start page\)<\/option>/g)].length, 2);
+    assert.match(html, /Auto-generated QR codes open the attendee start page first, even when only one channel is enabled/);
+    assert.match(html, /Uploaded QR images may point elsewhere; replace those images if they skip the notice/);
+});
+
+test("Portuguese displays localize the new and legacy SMS prompts separately", () => {
+    assert.equal(
+        localizeDisplayHtml("<p>Hit send to start!</p><p>Hit send to start</p>", "pt_BR"),
+        "<p>Toque em enviar para começar!</p><p>Toque em enviar para começar</p>",
+    );
+});
+
+test("Combo defaults to the static instruction panel for a new event", () => {
+    const originalGet = settings.get;
+    try {
+        settings.get = (key) => ({ boothDisplayMode: undefined, videoFile: "intro.mp4" })[key];
+        assert.match(buildComboHtml(), /id="leftPane" src="\/home\/panel"/);
+    } finally {
+        settings.get = originalGet;
+    }
+});
+
+test("Combo retains the video panel for an existing video setting", () => {
+    const originalGet = settings.get;
+    try {
+        settings.get = (key) => ({ boothDisplayMode: "video", videoFile: "intro.mp4" })[key];
+        assert.match(buildComboHtml(), /id="leftPane" src="\/home\/video"/);
+    } finally {
+        settings.get = originalGet;
+    }
+});
 
 test("rendered Home and Settings inline scripts parse", () => {
     for (const html of [buildHomeHtml(), buildSettingsHtml()]) {
@@ -110,7 +240,7 @@ test("Voice readiness reports only a confirmed empty issue list as configured", 
     assert.match(fields.voiceReadiness.textContent, /Save edits to recheck, then place a test call/);
 });
 
-test("Settings collection retains all approved Voice template IDs and the shared number", () => {
+test("Settings collection retains Voice routing and multiline first messages", () => {
     const script = settingsScript();
     const collector = script.slice(script.indexOf("function collectSettingsBody()"), script.indexOf("async function _doSaveSettings()"));
     const fields = new Map();
@@ -129,6 +259,8 @@ test("Settings collection retains all approved Voice template IDs and the shared
     for (const [id, value] of Object.entries(voiceIds)) field(id).value = ` ${value} `;
     field("sTwilioVoiceNumber").value = "+14155550100";
     field("sEnableVoice").checked = true;
+    field("sBoothSmsText").value = FIRST_MESSAGE;
+    field("sBoothWhatsappPrefill").value = FIRST_MESSAGE;
     const context = {
         document: { getElementById: field, querySelectorAll: () => [] },
         _templateSelections: { portrait: "", landscape: "" }, _activeTemplateOrientation: "portrait",
@@ -141,6 +273,8 @@ test("Settings collection retains all approved Voice template IDs and the shared
     vm.runInContext(collector, context);
     const body = context.collectSettingsBody();
     assert.equal(body.enableVoice, true);
+    assert.equal(body.boothSmsInstructionText, FIRST_MESSAGE);
+    assert.equal(body.boothWhatsappPrefillText, FIRST_MESSAGE);
     assert.equal(body.twilioVoiceNumber, "+14155550100");
     assert.equal(body.contentTemplates.en.voiceInvitation, "HXinvitationEn");
     assert.equal(body.contentTemplates.en.voiceDelivery, "HXdeliveryEn");
@@ -324,6 +458,8 @@ test("local fixture preview serves sample pages and refuses every write", () => 
     assert.match(evalDetail.body, /Cartoon detail/);
     assert.match(evalDetail.body, /Page 1 of 2/);
     assert.equal(state.eventName, "DEMO EVENT");
+    assert.equal(state.boothSmsInstructionText, FIRST_MESSAGE);
+    assert.equal(state.boothWhatsappPrefillText, FIRST_MESSAGE);
     assert.equal(recipients.items.length, 5);
     assert.ok(recipients.total > recipients.items.length);
     assert.equal(portraits.images.length, 6);
@@ -338,4 +474,60 @@ test("local fixture preview serves sample pages and refuses every write", () => 
     assert.equal(runSummary.totals.total, 132);
     assert.deepEqual(Object.keys(state).filter((key) => ["openaiApiKey", "twilioAuthToken", "dubApiKey", "printRelayKey", "reviewPin"].includes(key)), []);
     assert.equal(rejected.status, 405);
+});
+
+test("local start preview shows every channel configuration and mandatory consent in both drafts", () => {
+    const server = createPreviewServer();
+    function request(url) {
+        const result = {};
+        server.emit("request", { method: "GET", url, headers: {} }, {
+            writeHead(status, headers) { result.status = status; result.headers = headers; },
+            end(body = "") { result.body = body.toString(); },
+        });
+        return result;
+    }
+
+    const sms = request("/start?event=DEMO+EVENT&channels=sms");
+    const whatsapp = request("/start?event=DEMO+EVENT&channels=whatsapp");
+    const both = request("/start?event=DEMO+EVENT&channels=both");
+    const notice = request("/start/notice?event=DEMO+EVENT");
+    const smsDraft = request("/start/open?event=DEMO+EVENT&channels=sms&channel=sms");
+    const whatsappDraft = request("/start/open?event=DEMO+EVENT&channels=whatsapp&channel=whatsapp");
+
+    assert.equal(sms.status, 200);
+    assert.match(sms.body, /name="channel" value="sms"/);
+    assert.doesNotMatch(sms.body, /name="channel" value="whatsapp"/);
+    assert.match(whatsapp.body, /name="channel" value="whatsapp"/);
+    assert.doesNotMatch(whatsapp.body, /name="channel" value="sms"/);
+    assert.match(both.body, /name="channel" value="sms"/);
+    assert.match(both.body, /name="channel" value="whatsapp"/);
+    assert.match(notice.body, /OpenAI/);
+    for (const draft of [smsDraft, whatsappDraft]) {
+        assert.equal(draft.status, 200);
+        assert.match(draft.body, /Hit send to start! 🚀/);
+        assert.match(draft.body, /By sending this text, I agree to Twilio’s Terms/);
+        assert.match(draft.body, /Privacy Notice \(twil\.io\/privacy\) for marketing communications/);
+        assert.match(draft.body, /Msg &amp; data rates apply/);
+        assert.match(draft.body, /Every starter draft includes the Twilio Terms/);
+        assert.match(draft.body, /Preview only/);
+        assert.equal(draft.headers.Location, undefined);
+    }
+});
+
+test("local fixture panel links to its desktop channel selector preview", async () => {
+    const server = createPreviewServer();
+    const result = await new Promise((resolve) => {
+        const response = {
+            writeHead(status, headers) { this.status = status; this.headers = headers; },
+            end(body = "") { resolve({ status: this.status, body: body.toString() }); },
+        };
+        server.emit("request", {
+            method: "GET", url: "/home/panel", headers: {}, socket: { localPort: 4173 },
+        }, response);
+    });
+
+    assert.equal(result.status, 200);
+    assert.match(result.body, /Local preview/);
+    assert.match(result.body, /QR points to 127\.0\.0\.1 and will not open on a phone/);
+    assert.match(result.body, /Open channel selector on this computer/);
 });

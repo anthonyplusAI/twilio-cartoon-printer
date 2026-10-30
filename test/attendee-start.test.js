@@ -4,6 +4,8 @@ const express = require("express");
 const vm = require("node:vm");
 const { isPublicRoute } = require("../lib/auth");
 const { createAttendeeStartRouter } = require("../lib/attendee-start");
+const FIRST_MESSAGE = "Hit send to start! 🚀\n\nBy sending this text, I agree to Twilio’s Terms (twil.io/terms) and Privacy Notice (twil.io/privacy) for marketing communications.\n\nMsg & data rates apply.";
+const ENCODED_FIRST_MESSAGE = encodeURIComponent(FIRST_MESSAGE);
 
 const eventSettings = {
     "Active Event": {
@@ -55,8 +57,10 @@ after(async () => {
 test("only exact read-only chooser paths are public", () => {
     assert.equal(isPublicRoute({ method: "GET", path: "/start" }), true);
     assert.equal(isPublicRoute({ method: "HEAD", path: "/start/" }), true);
+    assert.equal(isPublicRoute({ method: "GET", path: "/start/notice" }), true);
     assert.equal(isPublicRoute({ method: "GET", path: "/start/open" }), true);
     assert.equal(isPublicRoute({ method: "POST", path: "/start" }), false);
+    assert.equal(isPublicRoute({ method: "POST", path: "/start/notice" }), false);
     assert.equal(isPublicRoute({ method: "POST", path: "/start/open" }), false);
     assert.equal(isPublicRoute({ method: "GET", path: "/start/admin" }), false);
     assert.equal(isPublicRoute({ method: "GET", path: "/starter" }), false);
@@ -70,10 +74,15 @@ test("chooser renders the requested event and locale without leaking settings", 
     assert.equal(response.headers.get("cache-control"), "private, no-store");
     assert.equal(response.headers.get("content-language"), "pt-BR");
     assert.match(response.headers.get("content-security-policy"), /frame-ancestors 'none'/);
-    assert.match(body, /Escolha como começar/);
-    assert.match(body, /href="\/start\/open\?event=Active\+Event&amp;lang=pt_BR&amp;channel=sms&amp;carry=1"/);
-    assert.match(body, /href="\/start\/open\?event=Active\+Event&amp;lang=pt_BR&amp;channel=whatsapp&amp;carry=1"/);
-    assert.match(body, /&lt;script&gt;alert\(&#39;no&#39;\)&lt;\/script&gt;/);
+    assert.match(body, /Crie seu retrato com IA/);
+    assert.match(body, /Escolha SMS ou WhatsApp para abrir uma mensagem/);
+    assert.match(body, /Idioma da página:/);
+    assert.match(body, /<form[^>]+action="\/start\/open"[^>]+method="get"/);
+    assert.doesNotMatch(body, /name="marketing"|marketing-opt-in|Opcional\. Você ainda pode receber/);
+    assert.match(body, /name="channel"[^>]+value="sms"/);
+    assert.match(body, /name="channel"[^>]+value="whatsapp"/);
+    assert.doesNotMatch(body, /carry=1/);
+    assert.doesNotMatch(body, /&lt;script&gt;alert\(&#39;no&#39;\)&lt;\/script&gt;/);
     assert.doesNotMatch(body, /javascript:alert|must-not-leak|Archived Event/);
     const scripts = [...body.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/g)].map((match) => match[1]);
     for (const script of scripts) assert.doesNotThrow(() => new vm.Script(script));
@@ -85,13 +94,34 @@ test("launch route revalidates the event and adapts SMS links for iOS", async ()
         redirect: "manual",
     });
     assert.equal(sms.status, 302);
-    assert.equal(sms.headers.get("location"), "sms:+5511999990000&body=Portugu%C3%AAs");
+    assert.equal(sms.headers.get("location"), "sms:+5511999990000&body=" + ENCODED_FIRST_MESSAGE);
 
-    const whatsapp = await fetch(`${baseUrl}/start/open?event=Active+Event&lang=pt_BR&channel=whatsapp&carry=1`, { redirect: "manual" });
+    const whatsapp = await fetch(`${baseUrl}/start/open?event=Active+Event&lang=pt_BR&channel=whatsapp`, { redirect: "manual" });
     assert.equal(whatsapp.status, 302);
-    assert.equal(whatsapp.headers.get("location"), "https://wa.me/5511988880000?text=Portugu%C3%AAs");
+    assert.equal(whatsapp.headers.get("location"), "https://wa.me/5511988880000?text=" + ENCODED_FIRST_MESSAGE);
+
+    const oldMarketingFlag = await fetch(baseUrl + "/start/open?event=Active+Event&lang=en&channel=sms&marketing=1", { redirect: "manual" });
+    assert.equal(oldMarketingFlag.status, 302);
+    assert.equal(oldMarketingFlag.headers.get("location"), "sms:+5511999990000?body=" + ENCODED_FIRST_MESSAGE);
+
+    const invalidChoice = await fetch(baseUrl + "/start/open?event=Active+Event&lang=en&channel=sms&marketing=yes", { redirect: "manual" });
+    assert.equal(invalidChoice.headers.get("location"), "sms:+5511999990000?body=" + ENCODED_FIRST_MESSAGE);
 
     const stale = await fetch(`${baseUrl}/start/open?event=Archived+Event&lang=en&channel=sms`, { redirect: "manual" });
+    assert.equal(stale.status, 404);
+});
+
+test("full notice is public only for the active event and escapes configured text", async () => {
+    const response = await fetch(baseUrl + "/start/notice?event=Active+Event&lang=en");
+    const body = await response.text();
+
+    assert.equal(response.status, 200);
+    assert.match(body, /OpenAI/);
+    assert.match(body, /twil\.io\/privacy/);
+    assert.match(body, /&lt;script&gt;alert\(&#39;no&#39;\)&lt;\/script&gt;/);
+    assert.doesNotMatch(body, /href="javascript:|must-not-leak/);
+
+    const stale = await fetch(baseUrl + "/start/notice?event=Archived+Event&lang=en");
     assert.equal(stale.status, 404);
 });
 

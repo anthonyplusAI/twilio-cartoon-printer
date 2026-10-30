@@ -177,9 +177,11 @@ The main routes are:
 | `/home` | Operator home with event status, booth display launcher, and links to tools. |
 | `/home/settings` | Admin settings for event, portrait, delivery, booth display, messaging, and advanced configuration. |
 | `/dashboard` | Real-time monitoring. Queue depth, failures, top users, geography, print health, combined jobs panel. |
-| `/outreach` | User directory with broadcast SMS, raffle draws, lead export. |
+| `/outreach` | User directory with consent-gated broadcast messaging, raffle draws, lead export. |
 | `/photogallery` | Photo book — animated flip-through gallery of portraits for booth displays. |
-| `/home/combo` | Split-screen booth display (intro video + photo book side by side). |
+| `/home/combo` | Split-screen booth display (static instructions or intro video + photo book side by side). |
+| `/start` | Public attendee page opened by auto-generated booth QRs for one or both channels; shows channel buttons above data and OpenAI photo disclosures and the participation-terms link. |
+| `/start/notice` | Public participation terms linked from the attendee page. |
 | `/review` | Token/PIN-based review flow for staff. |
 | `/review/settings` | Review settings, including Review PIN replacement and removal. |
 | `/api/generate` | Programmatic generation endpoint used by kiosk/API clients. |
@@ -251,7 +253,7 @@ A: It's really their face. The image model (OpenAI's gpt-image-2 edit endpoint) 
 A: Typically 30-60 seconds. OpenAI's image model is the bottleneck. If the user picked a style or a brand menu, add a few seconds of SMS back-and-forth on top.
 
 **Q: Can users send any photo, or does it have to be a selfie?**
-A: Any photo with a clear face can pass face detection. By default, group photos are rejected by the Multi-Subject Photos setting (`multiSubjectMode: "reject"`). If the event changes that mode to allow multiple subjects, scene analysis counts the primary people and pets so the prompt preserves the intended subject count.
+A: Any photo with a clear face can pass face detection. New events use `multiSubjectMode: "normal"`, so group photos are generated as usual. Scene analysis counts the primary people and pets so the prompt preserves the intended subject count. An operator can switch an event to **Reject** when solo selfies are required.
 
 **Q: What if someone sends an inappropriate photo?**
 A: Content moderation runs first, before generation. Flagged photos get an apologetic SMS and don't cost the user a print. OpenAI's own content policy also blocks certain generations at the model level.
@@ -262,10 +264,12 @@ A: Yes, up to the configured `maxPrints` per phone number per event (default 2).
 ### User experience
 
 **Q: What's the actual SMS flow a user sees?**
-A: Text selfie → (optional) lead capture survey → style menu ("1. cartoon, 2. anime, …") → (optional) brand menu → (optional) background menu → "we're working on it" → portrait delivered via MMS and/or share link. Most events use just style selection; the menus are all optional and configurable.
+A: Scan the booth QR → see **Continue with SMS** directly under the heading, with the data and OpenAI photo disclosures and terms link below → tap **Continue with SMS** → send the pre-filled starter, which includes the Terms, Privacy Notice, and marketing enrollment text → send a selfie → (optional) lead capture survey → style menu ("1. cartoon, 2. anime, …") → (optional) brand menu → (optional) background menu → "we're working on it" → portrait delivered via MMS and/or share link. In Ask language mode, someone without a saved preference chooses their chat language after sending the starter. Most events use just style selection; the menus are configurable.
+
+If someone texts the SMS or WhatsApp sender directly without recorded enrollment, or removes the consent block from the draft, the app asks them to send the required starter before it asks for a chat language or processes a photo.
 
 **Q: How do users know to text the number?**
-A: Booth signage. The `/home/panel` page generates a branded instruction screen with a QR code that reveals the Twilio number when scanned. You run that on a monitor at the booth.
+A: Booth signage. New events use the static `/home/panel` instruction screen. Its auto-generated QR opens `/start` for SMS-only, WhatsApp-only, and dual-channel events. The **Continue with SMS** and/or **Continue with WhatsApp** buttons sit directly below the heading; data and OpenAI photo disclosures and a link to the full participation terms follow. The default draft begins `Hit send to start! 🚀` and includes the fixed Terms, Privacy Notice, and marketing enrollment block. Uploaded QR images may lead elsewhere, so check their destinations before the event. See [Channel Selector](GUIDE.md#channel-selector).
 
 **Q: What happens if a user types gibberish or asks a question instead of picking a style?**
 A: The app uses a smaller AI model (`gpt-5.4-nano` by default) to generate a conversational response. If they ask "what is twilio?" they get a real answer. If they say "hi", they get the style menu again. Short common phrases have static responses for speed.
@@ -333,8 +337,8 @@ A: The `/dashboard` page polls every 3 seconds and shows: queue depth, generatio
 **Q: What's the difference between "failed" and "superseded" in the dashboard?**
 A: Failed = an error happened (moderation, printer, generation). Superseded = a multi-variant job where the reviewer picked a different sibling. Superseded jobs are not failures — they're expected outcomes — so the dashboard excludes them from failure rates.
 
-**Q: How do I broadcast an SMS to all attendees?**
-A: `/outreach` page — select users (individually or all), compose, send. Good for announcements ("booth closes in 10 minutes") or follow-ups ("thanks for coming, here's a code").
+**Q: How do I broadcast a message to attendees?**
+A: Use `/outreach` to select users, compose, and send. The app skips recipients without a recorded marketing opt-in for their event and messaging channel.
 
 **Q: How do I draw a raffle winner?**
 A: `/outreach` → Draw Winner button. Animates through users before landing on one. Winner is saved permanently in `data/raffle.json`. Running it again picks a different person.
@@ -374,7 +378,7 @@ A: Simplicity. Webhook, workers, dashboard, all share memory. You can see the st
 A: Admin pages are protected by Google OAuth, and relay APIs require `x-relay-key`. The `/inbound` webhook is public and the current app does not validate `X-Twilio-Signature`, so only point trusted Twilio senders at it or add signature validation before using it in a higher-risk environment. Share pages and generated image routes are public by design.
 
 **Q: Are user phone numbers and photos stored permanently?**
-A: Photos yes — `downloads/<eventName>/<prefix>_input.jpg` and `<prefix>_output.png` stick around. Phone numbers are stored in job files, lead data, raffle data, NPS scores. Nothing is auto-deleted. For a production-grade retention policy, you'd need to add explicit cleanup — not implemented.
+A: Original and generated photos in `downloads/<eventName>/` and related attendee records persist until the operator deletes them; V1 has no automatic retention limit or end-of-event deletion. The participation terms promise limited original-photo retention and deletion following the event, so staff need a cleanup process before live use. `/home/settings` > **Reset & data** > **Clear event data** is a manual action that deletes event jobs, generated images, leads, contacts, and kiosk submissions; settings and audit history remain.
 
 **Q: Can I run two events at once on the same deployment?**
 A: Only one "active" event at a time. The event name in settings determines where incoming MMS gets routed. If you need two simultaneous events, the clean answer is two separate deployments with different Twilio numbers.
