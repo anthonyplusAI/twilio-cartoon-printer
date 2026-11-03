@@ -63,13 +63,14 @@ test("kiosk quota stays enforced when a cache rebuild overlaps admission", async
     // The rebuild has already snapshotted PENDING when it reaches GENERATING.
     // Pause there so the first accepted job can overlap the stale snapshot.
     fsp.readdir = async function(dir, options) {
-        const entries = await original.readdir.call(fsp, dir, options);
         if (dir === GENERATING_DIR && !gated) {
             gated = true;
             gateReached();
             await rebuildGate;
         }
-        return entries;
+        // A clean CI checkout may not have queue/generating yet. Gate before
+        // readdir so ENOENT cannot leave enteredGate unresolved forever.
+        return original.readdir.call(fsp, dir, options);
     };
 
     try {
@@ -98,7 +99,10 @@ test("kiosk quota stays enforced when a cache rebuild overlaps admission", async
         };
 
         const rebuild = queue.buildUsageCache();
-        await enteredGate;
+        await Promise.race([
+            enteredGate,
+            rebuild.then(() => { throw new Error("Quota rebuild finished before reaching the test gate"); }),
+        ]);
         const firstRequest = submit(requestIds[0]);
         // Before the fix, the request completes while the rebuild is paused;
         // after the fix, admission waits for the rebuild to finish.
