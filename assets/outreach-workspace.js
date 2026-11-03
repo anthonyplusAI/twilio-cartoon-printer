@@ -48,7 +48,7 @@
     if (view === "messaging" || view === "followups") {
       $(cfg.body).innerHTML = '<div class="list-state">Loading ' + cfg.noun + 's…</div>';
     } else {
-      $(cfg.body).innerHTML = '<tr><td colspan="' + (view === "kiosk" ? 7 : 6) + '" class="table-state">Loading ' + cfg.noun + 's…</td></tr>';
+      $(cfg.body).innerHTML = '<tr><td colspan="' + (view === "kiosk" ? 8 : 6) + '" class="table-state">Loading ' + cfg.noun + 's…</td></tr>';
     }
   }
 
@@ -57,7 +57,7 @@
     const safe = escapeHtml(message || "Unable to load this list");
     const html = '<div class="list-state">' + safe + '<br><button type="button" class="empty-action" data-retry="' + view + '">Try again</button></div>';
     if (view === "messaging" || view === "followups") $(cfg.body).innerHTML = html;
-    else $(cfg.body).innerHTML = '<tr><td colspan="' + (view === "kiosk" ? 7 : 6) + '" class="table-state">' + safe + '<br><button type="button" class="empty-action" data-retry="' + view + '">Try again</button></td></tr>';
+    else $(cfg.body).innerHTML = '<tr><td colspan="' + (view === "kiosk" ? 8 : 6) + '" class="table-state">' + safe + '<br><button type="button" class="empty-action" data-retry="' + view + '">Try again</button></td></tr>';
   }
 
   async function loadList(view, { silent = false } = {}) {
@@ -170,19 +170,51 @@
       + '<td data-label="Company">' + escapeHtml(lead.company || "—") + '</td><td data-label="Title">' + escapeHtml(lead.jobTitle || "—") + '</td><td data-label="Country">' + escapeHtml(lead.country || "—") + '</td></tr>').join("");
   }
 
+  function renderKioskStatus(item) {
+    const status = item.kioskStatus;
+    const detailUrl = '/api/generate/' + escapeHtml(encodeURIComponent(item.filePrefix)) + '/status';
+    if (!status) return '<div class="kiosk-status"><span class="kiosk-status-line is-warning">Status unavailable</span><a href="' + detailUrl + '" target="_blank" rel="noopener">Job details</a></div>';
+    const channels = { sms: "SMS", whatsapp: "WhatsApp", email: "Email" };
+    const portraits = { pending: "Queued", generating: "Generating", review: "Awaiting review", ready: "Ready", printing: "Printing", done: "Ready", failed: "Failed" };
+    const deliveries = {
+      pending: "Waiting for portrait", sending: "Sending", retry: "Retry scheduled",
+      accepted: "Provider accepted", delivered: "Delivered", failed: "Failed",
+      uncertain: "Needs review",
+    };
+    const prints = { waiting: "Waiting for portrait", queued: "Queued", printing: "Printing", printed: "Printed", failed: "Failed", unavailable: "Portrait unavailable" };
+    const channel = channels[status.channel || item.channel] || "Delivery";
+    const deliveryState = status.delivery?.state || "pending";
+    const printState = status.print?.state || "";
+    const line = (label, value, tone = "") => '<span class="kiosk-status-line' + tone + '">' + escapeHtml(label + ': ' + value) + '</span>';
+    let html = '<div class="kiosk-status">'
+      + line("Portrait", portraits[status.portrait] || "Checking", status.portrait === "failed" ? " is-error" : "")
+      + line(channel, deliveries[deliveryState] || "Checking", ["failed", "uncertain"].includes(deliveryState) ? " is-error" : deliveryState === "retry" ? " is-warning" : deliveryState === "delivered" ? " is-success" : "");
+    if (status.print) html += line("Print", prints[printState] || "Checking", printState === "failed" ? " is-error" : printState === "printed" ? " is-success" : "");
+    if (deliveryState === "retry" && Number.isFinite(status.delivery.nextAttemptAt)) {
+      html += '<small>Next attempt ' + escapeHtml(new Date(status.delivery.nextAttemptAt).toLocaleString()) + '</small>';
+    }
+    if (deliveryState === "uncertain") html += '<small>Provider result unknown; check before resending.</small>';
+    if (["failed", "uncertain"].includes(deliveryState) || printState === "failed" || status.portrait === "failed") {
+      html += '<a href="' + detailUrl + '" target="_blank" rel="noopener">Job details</a>';
+    }
+    return html + '</div>';
+  }
+
   function renderKiosk() {
     const items = state.lists.kiosk.items;
     if (!items.length) {
-      $("kioskSubsBody").innerHTML = '<tr><td colspan="7" class="table-state">' + (state.lists.kiosk.q ? "No submissions match this search." : "No kiosk submissions for this event yet.") + '</td></tr>';
+      $("kioskSubsBody").innerHTML = '<tr><td colspan="8" class="table-state">' + (state.lists.kiosk.q ? "No submissions match this search." : "No kiosk submissions for this event yet.") + '</td></tr>';
       return;
     }
     $("kioskSubsBody").innerHTML = items.map((item, index) => {
-      const imageUrl = '/photogallery/img/' + escapeHtml(encodeURIComponent(item.event)) + '/' + escapeHtml(encodeURIComponent(item.filePrefix)) + '_output.png';
-      const thumbUrl = 'api/thumbnail/' + escapeHtml(encodeURIComponent(item.event)) + '/' + escapeHtml(encodeURIComponent(item.filePrefix));
+      const imagePrefix = item.resultPrefix || item.filePrefix;
+      const imageUrl = '/photogallery/img/' + escapeHtml(encodeURIComponent(item.event)) + '/' + escapeHtml(encodeURIComponent(imagePrefix)) + '_output.png';
+      const thumbUrl = 'api/thumbnail/' + escapeHtml(encodeURIComponent(item.event)) + '/' + escapeHtml(encodeURIComponent(imagePrefix));
       return '<tr data-index="' + index + '"><td class="kiosk-image-cell" data-label="Portrait"><a href="' + imageUrl + '" target="_blank" rel="noopener" title="Open full portrait"><img class="kiosk-thumb" src="' + thumbUrl + '" alt="" width="52" height="52" loading="lazy" decoding="async"></a></td>'
         + '<td data-label="Phone">' + escapeHtml(item.phone || "—") + '</td>'
         + '<td data-label="Email"><label class="sr-only" for="kiosk-email-' + index + '">Email for submission ' + (index + 1) + '</label><input class="kiosk-email" id="kiosk-email-' + index + '" type="email" value="' + escapeHtml(item.email || "") + '" placeholder="Add email" autocomplete="off"></td>'
         + '<td data-label="Style">' + escapeHtml(item.style || "—") + '</td><td data-label="Submitted">' + (item.submittedAt ? escapeHtml(new Date(item.submittedAt).toLocaleString()) : "—") + '</td>'
+        + '<td data-label="Delivery and print">' + renderKioskStatus(item) + '</td>'
         + '<td data-label="Emailed"><input class="kiosk-emailed" type="checkbox" aria-label="Mark submission ' + (index + 1) + ' emailed"' + (item.emailedAt ? ' checked' : '') + '></td>'
         + '<td data-label="Actions"><button type="button" class="icon-button kiosk-dismiss" title="Remove contact record" aria-label="Remove contact record">×</button></td></tr>';
     }).join("");
@@ -559,6 +591,7 @@
     document.addEventListener("click", (event) => { if (!event.target.closest("#userMenu, [data-user-menu]")) closeUserMenu(); });
     document.addEventListener("keydown", (event) => { if (event.key === "Escape") closeUserMenu(); });
     $("kioskSubsBody").addEventListener("focusout", (event) => { if (event.target.matches(".kiosk-email")) saveKioskEmail(event.target); });
+    $("refreshKiosk").addEventListener("click", () => loadList("kiosk", { silent: true }));
     $("kioskSubsBody").addEventListener("keydown", (event) => {
       if (!event.target.matches(".kiosk-email")) return;
       if (event.key === "Enter") { event.preventDefault(); event.target.blur(); }
@@ -624,7 +657,8 @@
     pollReviews();
     setInterval(() => {
       if (document.hidden || !state.event) return;
-      if (state.view === "messaging" || state.view === "followups") {
+      if (state.view === "messaging" || state.view === "followups"
+        || (state.view === "kiosk" && !document.querySelector("#kioskSubsBody .kiosk-email:focus"))) {
         loadList(state.view, { silent: true });
         if (state.view === "messaging") loadRaffle();
       }

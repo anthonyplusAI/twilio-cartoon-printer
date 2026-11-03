@@ -65,6 +65,10 @@ properties:
             secretRef: session-secret
           - name: PRINT_RELAY_KEY
             secretRef: print-relay-key
+          # Rendered by deploy.yml from GitHub SendGrid settings. Every setting
+          # gets an explicit empty value when unset so stale Azure refs cannot
+          # leave email delivery enabled.
+          # SENDGRID_ENV_BINDINGS
         volumeMounts:
           - volumeName: appdata
             mountPath: /app/appdata

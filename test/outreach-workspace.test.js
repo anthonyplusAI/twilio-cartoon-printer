@@ -21,6 +21,85 @@ test("Outreach pagination filters before slicing and bounds page size", () => {
     assert.equal(rows.length, 121);
 });
 
+test("kiosk outreach shows the approved variant while retaining the original submission key", async () => {
+    const app = syntheticOutreach({ kioskVariantWinner: true });
+    const response = await app.request("get", "/api/kiosk-submissions", {
+        query: { event: "Event A", paged: "1", q: "portrait_0-v1" },
+    });
+    assert.equal(response.status, 200);
+    assert.equal(response.payload.total, 1);
+    assert.equal(response.payload.items[0].filePrefix, "portrait_0-v1");
+    assert.equal(response.payload.items[0].resultPrefix, "portrait_0-v2");
+});
+
+test("kiosk outreach reports the resolved job's digital and print state", async () => {
+    const app = syntheticOutreach({
+        kioskVariantWinner: true,
+        kioskStatus: {
+            dir: "/synthetic/ready",
+            job: {
+                filePrefix: "portrait_0-v2", eventName: "Event A", kioskSubmission: true,
+                channel: "email", kioskDeliveryState: "uncertain", kioskDeliveryAttempts: 1,
+                kioskEventSnapshot: { eventSettings: { enablePrinting: true } },
+                readyAt: 500,
+            },
+        },
+    });
+    const response = await app.request("get", "/api/kiosk-submissions", {
+        query: { event: "Event A", paged: "1", q: "portrait_0-v1" },
+    });
+    const row = response.payload.items[0];
+    assert.equal(row.resultPrefix, "portrait_0-v2");
+    assert.deepEqual(JSON.parse(JSON.stringify(row.kioskStatus)), {
+        portrait: "ready",
+        channel: "email",
+        delivery: { state: "uncertain", attempts: 1 },
+        print: { state: "queued" },
+    });
+});
+
+test("kiosk outreach does not report a job from another event", async () => {
+    const app = syntheticOutreach({
+        kioskStatus: {
+            dir: "/synthetic/done",
+            job: {
+                filePrefix: "portrait_0", eventName: "Another event", kioskSubmission: true,
+                channel: "sms", kioskDeliveryState: "delivered",
+            },
+        },
+    });
+    const response = await app.request("get", "/api/kiosk-submissions", {
+        query: { event: "Event A", paged: "1", q: "portrait_0" },
+    });
+    assert.equal(response.payload.items[0].kioskStatus, null);
+});
+
+test("kiosk outreach portrait links and delivery status use the approved variant prefix", () => {
+    const source = fs.readFileSync(path.join(__dirname, "..", "assets", "outreach-workspace.js"), "utf8");
+    const row = {
+        filePrefix: "portrait_0-v1", resultPrefix: "portrait_0-v2", event: "Event A",
+        email: "guest@example.test",
+        kioskStatus: { portrait: "ready", channel: "email", delivery: { state: "uncertain", attempts: 1 }, print: { state: "queued" } },
+    };
+    const body = { innerHTML: "", querySelectorAll: () => [] };
+    const exposed = {};
+    const instrumented = source.replace(/  start\(\);\s*\}\)\(\);\s*$/, "  Object.assign(globalThis.__outreachTest, { state, renderKiosk });\n})();");
+    assert.notEqual(instrumented, source, "the test loads the actual Outreach renderer");
+    vm.runInNewContext(instrumented, {
+        document: { getElementById: (id) => id === "kioskSubsBody" ? body : null },
+        Date, encodeURIComponent, URLSearchParams, AbortController, console,
+        __outreachTest: exposed,
+    }, { filename: "outreach-workspace.js" });
+    const view = exposed;
+    view.state.lists.kiosk.items = [row];
+    view.renderKiosk();
+    assert.match(body.innerHTML, /\/photogallery\/img\/Event%20A\/portrait_0-v2_output\.png/);
+    assert.match(body.innerHTML, /api\/thumbnail\/Event%20A\/portrait_0-v2/);
+    assert.match(body.innerHTML, /Email: Needs review/);
+    assert.match(body.innerHTML, /Print: Queued/);
+    assert.match(body.innerHTML, /\/api\/generate\/portrait_0-v1\/status/);
+});
+
 test("Outreach preview renderer is independent of live stores and uses deferred view assets", () => {
     const html = buildOutreachHtml();
     assert.match(html, /\/assets\/outreach-workspace\.css/);
@@ -33,7 +112,7 @@ test("Outreach preview renderer is independent of live stores and uses deferred 
     new vm.Script(fs.readFileSync(path.join(__dirname, "..", "assets", "outreach-workspace.js"), "utf8"));
 });
 
-function syntheticOutreach({ holdFirstDoneRead = false, holdSecondReadFile = false, marketingConsent = false } = {}) {
+function syntheticOutreach({ holdFirstDoneRead = false, holdSecondReadFile = false, marketingConsent = false, legacyRawUpload = false, kioskVariantWinner = false, kioskStatus = null } = {}) {
     const routes = { get: new Map(), post: new Map(), delete: new Map() };
     const router = {
         use() {},
@@ -51,8 +130,18 @@ function syntheticOutreach({ holdFirstDoneRead = false, holdSecondReadFile = fal
         createdAt: i + 1,
         style: "cartoon",
     }));
+    const rawUpload = "api_123e4567-e89b-12d3-a456-426614174000_input.jpg";
+    const imageDir = "/synthetic/downloads/Event A";
+    const imageFiles = new Set(legacyRawUpload
+        ? ["portrait_0_output.png", "portrait_0_input.jpg", rawUpload, "portrait_01_output.png"]
+        : []);
+    if (legacyRawUpload) {
+        jobs[0].kioskSubmission = true;
+        jobs[0].uploadedInputFile = rawUpload;
+    }
     const jobFiles = new Map(jobs.map((job, i) => [`${i}.json`, job]));
     const kiosk = Array.from({ length: 72 }, (_, i) => ({ filePrefix: `portrait_${i}`, event: "Event A", phone: `+1415555${String(i).padStart(4, "0")}`, email: `guest${i}@example.test`, submittedAt: i }));
+    if (kioskVariantWinner) kiosk[0].filePrefix = "portrait_0-v1";
     const leads = Array.from({ length: 83 }, (_, i) => ({ firstName: `Guest ${i}`, lastName: "Test", phone: `+1415555${String(i).padStart(4, "0")}`, email: `guest${i}@example.test`, company: "Twilio", completedAt: i }));
     const followups = Array.from({ length: 65 }, (_, i) => ({ phone: `+1415777${String(i).padStart(4, "0")}`, eventName: "Event A", firstContactAt: i }));
     let accessCount = 0;
@@ -80,6 +169,9 @@ function syntheticOutreach({ holdFirstDoneRead = false, holdSecondReadFile = fal
                 return [...jobFiles.keys()];
             },
             readFile: async (file) => {
+                if (kioskStatus && file === path.join(kioskStatus.dir, `${kioskStatus.job.filePrefix}.json`)) {
+                    return JSON.stringify(kioskStatus.job);
+                }
                 const job = jobFiles.get(path.basename(file));
                 if (!job) throw Object.assign(new Error("job gone"), { code: "ENOENT" });
                 const snapshot = JSON.stringify(job);
@@ -93,9 +185,12 @@ function syntheticOutreach({ holdFirstDoneRead = false, holdSecondReadFile = fal
             stat: async () => ({ size: 1024, mtimeMs: 1 }),
         },
         existsSync: () => false,
-        readdirSync: (dir) => dir === doneDir ? [...jobFiles.keys()] : [],
+        readdirSync: (dir) => dir === doneDir ? [...jobFiles.keys()] : dir === imageDir ? [...imageFiles] : [],
         readFileSync: (file) => JSON.stringify(jobFiles.get(path.basename(file))),
-        unlinkSync: (file) => { jobFiles.delete(path.basename(file)); },
+        unlinkSync: (file) => {
+            if (path.dirname(file) === imageDir) imageFiles.delete(path.basename(file));
+            else jobFiles.delete(path.basename(file));
+        },
         writeFileSync() {},
         renameSync() {},
     };
@@ -104,7 +199,7 @@ function syntheticOutreach({ holdFirstDoneRead = false, holdSecondReadFile = fal
         path,
         express,
         sharp: () => ({ rotate() { return this; }, resize() { return this; }, webp() { return this; }, toBuffer: async () => Buffer.from("synthetic-image") }),
-        "./config": { DONE_DIR: doneDir, PENDING_DIR: "/synthetic/pending", GENERATING_DIR: "/synthetic/generating", REVIEW_DIR: "/synthetic/review", READY_DIR: "/synthetic/ready", PRINTING_DIR: "/synthetic/printing", FAILED_DIR: "/synthetic/failed" },
+        "./config": { DONE_DIR: doneDir, PENDING_DIR: "/synthetic/pending", GENERATING_DIR: "/synthetic/generating", REVIEW_DIR: "/synthetic/review", READY_DIR: "/synthetic/ready", PRINTING_DIR: "/synthetic/printing", PROCESSING_DIR: "/synthetic/processing", FAILED_DIR: "/synthetic/failed" },
         "./settings": { get: (key) => key === "eventName" ? "Event A" : [], getForEvent: () => "en", getDownloadDir: (event) => `/synthetic/downloads/${event}` },
         "./messaging": { send: async () => { sentMessages++; return {}; } },
         "./leads": { getLeadName: (phone) => `Guest ${Number(phone.slice(-4))}`, getLeads: () => leads.slice(), deleteByPhone: () => 1 },
@@ -118,7 +213,12 @@ function syntheticOutreach({ holdFirstDoneRead = false, holdSecondReadFile = fal
         "./channels": { ADAPTERS: { sms: { name: "sms", isConfigured: () => true } } },
         "./i18n": { resolveAttendeeLocale: () => "en", DEFAULT_LOCALE: "en", t: () => "Finish your portrait" },
         "./photogallery": { invalidatePhotoGalleryCache() {} },
-        "./queue": { buildUsageCache() {} },
+        "./queue": {
+            buildUsageCache() {},
+            resolveKioskResultPrefix: async (prefix, event) =>
+                kioskVariantWinner && event === "Event A" && prefix === "portrait_0-v1"
+                    ? "portrait_0-v2" : prefix,
+        },
         "./auth": { userBarSnippet: () => "", magicHatSnippet: () => "" },
         "./outreach-page": { paginateRows, buildOutreachHtml: () => "<html></html>" },
         "node:crypto": { randomInt: (bound) => { randomBound = bound; return bound - 1; } },
@@ -155,6 +255,7 @@ function syntheticOutreach({ holdFirstDoneRead = false, holdSecondReadFile = fal
         advanceTime: (ms) => { now += ms; },
         get accessCount() { return accessCount; }, get randomBound() { return randomBound; },
         get sentMessages() { return sentMessages; }, get nudgedContacts() { return nudgedContacts; },
+        get imageFiles() { return [...imageFiles]; },
     };
 }
 
@@ -211,6 +312,16 @@ test("cold Outreach deletion waits for completed jobs before resolving users", a
     const result = await request;
     assert.equal(result.status, 200);
     assert.equal(result.payload.deletedLeads, 1);
+});
+
+test("deleting a kiosk user removes the legacy raw upload without touching a neighboring prefix", async () => {
+    const app = syntheticOutreach({ legacyRawUpload: true });
+    const deleted = await app.request("delete", "/api/users", {
+        body: { ids: [1654912861], event: "Event A", scope: "photos" },
+    });
+    assert.equal(deleted.status, 200);
+    assert.equal(deleted.payload.deletedImages, 3);
+    assert.deepEqual(app.imageFiles, ["portrait_01_output.png"]);
 });
 
 test("a refresh started before deletion cannot restore a deleted recipient", async () => {
@@ -276,11 +387,14 @@ test("Kiosk log caches unchanged reads and keeps identical prefixes in different
     ].map((row) => JSON.stringify(row)).join("\n") + "\n";
     let version = 1;
     let reads = 0;
+    const temporaryFiles = new Map();
     const fakeFs = {
         existsSync: () => true,
         statSync: () => ({ size: text.length, mtimeMs: version, ctimeMs: version }),
         readFileSync: () => { reads++; return text; },
         appendFileSync: (_file, value) => { text += value; version++; },
+        writeFileSync: (file, value) => { temporaryFiles.set(file, value); },
+        renameSync: (from) => { text = temporaryFiles.get(from); temporaryFiles.delete(from); version++; },
         mkdirSync() {},
     };
     const module = { exports: {} };
@@ -292,12 +406,15 @@ test("Kiosk log caches unchanged reads and keeps identical prefixes in different
     assert.equal(store.listByEvent(null).length, 2);
     assert.equal(store.listByEvent(null).length, 2);
     assert.equal(reads, 1, "unchanged polling reuses parsed log");
+    store.setEmail("same", "A", "new@example.test");
     store.markEmailed("same", "A");
     const refreshed = store.listByEvent(null);
     assert.equal(refreshed.length, 2);
     assert.ok(refreshed.find((row) => row.event === "A").emailedAt);
+    assert.equal(refreshed.find((row) => row.event === "A").email, "new@example.test");
     assert.equal(refreshed.find((row) => row.event === "B").email, "b@example.test");
-    assert.equal(reads, 1, "appending a status edit updates the warm cache");
+    assert.doesNotMatch(text, /a@example\.test/, "superseded contact details are removed from disk");
+    assert.equal(reads, 1, "compacting an edit updates the warm cache");
     version++;
     text += JSON.stringify({ filePrefix: "new", event: "A", email: "new@example.test", submittedAt: 4 }) + "\n";
     assert.equal(store.listByEvent("A").length, 2);

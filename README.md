@@ -120,6 +120,7 @@ See [Installation](#installation), [Usage](#usage), and [Cloud Deployment](#clou
 - **Node.js** 22+
 - **pnpm** -- install with `npm install -g pnpm` ([docs](https://pnpm.io/installation))
 - **Twilio account** with an SMS/MMS sender, a Messaging Service, or a WhatsApp sender
+- **SendGrid account** with a verified sender (optional, for kiosk email delivery)
 - **OpenAI API key** with access to the configured text and image models (`gpt-5.5`, `gpt-5.4-nano`, and `gpt-image-2-2026-04-21` by default)
 - **Google OAuth client** for the admin UI (`/home`, `/home/settings`, `/dashboard`, `/outreach`, and settings APIs)
 - **Printer** (optional) -- Epson EcoTank ET-8550 recommended, connected via USB/WiFi and registered in CUPS
@@ -197,6 +198,32 @@ ngrok http 3000
 ```
 
 Copy the ngrok URL (e.g. `https://abc123.ngrok.io`) and set it as your Twilio webhook: `https://abc123.ngrok.io/inbound`
+
+### Camera kiosk (V1)
+
+An operator signs in and opens `/kiosk` on the event device. The launch step replaces the full admin cookie with a 24-hour kiosk-only session tied to the active event; the kiosk browser can submit portraits but cannot open other admin pages. Launching in the same browser profile signs the operator out of the admin workspace, so use a separate profile or device for ongoing admin work. Staff must relaunch the kiosk after its session expires or the active event changes.
+
+Open the kiosk on the camera device over HTTPS (or `localhost` during local development); camera access is unavailable to a plain HTTP page on another device.
+
+A guest takes a photo, previews or retakes it, then chooses from the active event's enabled art styles, brand themes, and backgrounds. They choose **one** configured delivery method (SMS, WhatsApp, or email), enter that destination, and agree to AI processing and public display of the finished portrait. WhatsApp requires a separate opt-in. The screen clears the guest's photo and contact details after submission or inactivity.
+
+The kiosk confirms when a job is **queued**. Once generation and any required review finish, the portrait appears in `/photogallery`; the original kiosk selfie remains private and is removed after publication. SMS and WhatsApp delivery use Twilio; email sends the finished image as a SendGrid attachment. With **Print + Digital**, the same kiosk job also enters the local printer or Print Relay queue. Kiosk digital delivery starts immediately after approval even if the event's general digital delivery setting waits for printing.
+
+To offer email, configure a SendGrid Mail Send API key and a verified sender in your deployment environment (or local `.env`):
+
+```sh
+SENDGRID_API_KEY=SG.your-api-key
+SENDGRID_FROM_EMAIL=portraits@example.com
+# SENDGRID_FROM_NAME=AI Photo Booth
+# SENDGRID_REGION=eu  # EU regional subusers only
+# SENDGRID_EVENT_WEBHOOK_PUBLIC_KEY=your-base64-public-verification-key
+```
+
+The per-event **Booth display → Kiosk email** switch controls whether configured email appears. SMS and WhatsApp follow the event's channel switches; WhatsApp also needs an approved `delivery` Content SID for each offered language. Set `BASE_URL` to the public HTTPS app origin so portrait links and Twilio delivery callbacks work. SendGrid's `202` response means it accepted the email for processing. To track email delivery and bounces, configure a **Signed Event Webhook** for `https://your-app.example.com/api/kiosk-delivery/sendgrid-events`, enable delivery and failure events, and set its public verification key above. Without that webhook, email status remains `accepted`. Twilio status callbacks distinguish accepted messages from delivered or failed messages. Staff can see generation, delivery, and print status in **Outreach → Kiosk**, or inspect `/api/generate/<job-id>/status` with an admin session.
+
+For this repository's Azure deployment, add the SendGrid values through GitHub Actions secrets and variables, then redeploy. See [SendGrid kiosk email on Azure](docs/GUIDE.md#sendgrid-kiosk-email-on-azure) for the exact setup steps.
+
+Before opening the kiosk to guests, submit one test portrait through each enabled method, verify the received image and photo book entry, and, when printing is on, verify a physical print from the connected printer or Print Station. See the [detailed kiosk guide](docs/GUIDE.md#camera-kiosk) for the full rehearsal steps.
 
 ### Optional Voice portraits
 
@@ -438,7 +465,7 @@ Both the Print Station app and CLI relay share these capabilities:
 | `/review/*` | Mobile review flow and review-token routes |
 | `/review/settings` | Review settings, including write-only Review PIN replacement/removal |
 | `/api/generate` | Programmatic/kiosk generation API |
-| `/kiosk` | Browser kiosk submission with SMS or approved-template WhatsApp portrait delivery |
+| `/kiosk` | Browser camera kiosk with SMS, approved-template WhatsApp, or SendGrid email delivery and optional printing |
 | `/eval` | Prompt experiment and evaluation tools |
 | `/api/print-relay/*` | Relay polling, claim, heartbeat, image download, completion, and reprint API |
 | `/healthz` | Lightweight health check for CI and cloud probes |

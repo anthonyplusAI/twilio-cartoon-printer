@@ -41,6 +41,8 @@ const {
     sweepMissingOutputJobs,
     sweepPendingTerminalEffects,
     sweepVoiceDeliveries,
+    sweepKioskDeliveries,
+    setKioskDeliveryReady,
     cleanupQueueTempFiles,
 } = require("./lib/queue");
 const { parseStyle, detectStyle } = require("./lib/styles");
@@ -50,12 +52,14 @@ const backgroundMenu = require("./lib/background-menu");
 const { resolveBrandStep } = require("./lib/menu-routing");
 const { getActiveBrands } = require("./lib/brands");
 const { mountDashboard } = require("./lib/dashboard");
-const { mountApiGenerate } = require("./lib/api-generate");
+const { mountApiGenerate, sweepStaleKioskUploads } = require("./lib/api-generate");
 const { mountKiosk } = require("./lib/kiosk");
+const { mountKioskDeliveryStatus } = require("./lib/kiosk-delivery-status");
+const { mountKioskSendGridStatus } = require("./lib/kiosk-sendgrid-status");
 const { mountReview } = require("./lib/review");
 const { mountExperiments } = require("./lib/experiments");
 const { mountHome } = require("./lib/home");
-const { mountPhotoGallery } = require("./lib/photogallery");
+const { mountPhotoGallery, isPrivateKioskImage } = require("./lib/photogallery");
 const { mountOutreach } = require("./lib/outreach");
 const { mountShare } = require("./lib/share");
 const { mountPrintRelay } = require("./lib/print-relay");
@@ -144,12 +148,16 @@ app.use("/images/staging", requireStagedMediaAuth, (req, res, next) => {
     })(req, res, next);
 });
 // Serve approved images — resolves download dir dynamically per request
-app.use("/images", (req, res, next) => {
-    express.static(settings.getDownloadDir(), {
-        setHeaders: (response, filePath) => response.setHeader("Cache-Control", filePath.endsWith("_input.jpg")
-            ? "private, no-store"
-            : "public, max-age=0, must-revalidate"),
-    })(req, res, next);
+app.use("/images", async (req, res, next) => {
+    try {
+        const file = decodeURIComponent(req.path.replace(/^\//, ""));
+        if (await isPrivateKioskImage(settings.get("eventName"), file)) return res.sendStatus(404);
+        express.static(settings.getDownloadDir(), {
+            setHeaders: (response, filePath) => response.setHeader("Cache-Control", filePath.endsWith("_input.jpg")
+                ? "private, no-store"
+                : "public, max-age=0, must-revalidate"),
+        })(req, res, next);
+    } catch (error) { next(error); }
 });
 
 // ── Twilio Webhook ───────────────────────────────────────────────────────────
@@ -947,6 +955,8 @@ const validateTwilioWebhook = createTwilioWebhookValidator();
 const parseTwilioWebhook = bodyParser.urlencoded({ extended: false });
 app.post("/inbound", parseTwilioWebhook, validateTwilioWebhook, inboundHandler);
 app.post("/sms", parseTwilioWebhook, validateTwilioWebhook, inboundHandler);
+mountKioskDeliveryStatus(app);
+mountKioskSendGridStatus(app);
 mountVoiceHttp(app, { store: voiceStore, settings, agent: voiceAgent });
 
 // ── Start ────────────────────────────────────────────────────────────────────
@@ -959,6 +969,9 @@ if (channelIssues.some((issue) => issue.fatal)) {
     throw new Error("Invalid messaging sender configuration");
 }
 
+// Recovery may settle old print jobs before media routes are mounted. Hold
+// kiosk provider sends until those routes can serve the finished portrait.
+setKioskDeliveryReady(false);
 const server = app.listen(port, "0.0.0.0", async () => {
     server.keepAliveTimeout = 65_000;
     server.headersTimeout = 66_000;
@@ -977,7 +990,8 @@ const server = app.listen(port, "0.0.0.0", async () => {
     leads.load();
     nps.load();
     settings.onEventNameChange(() => buildUsageCache());
-    const terminalEffectsRecovered = await recoverStaleJobs();
+    await recoverStaleJobs();
+    await sweepStaleKioskUploads();
     mountHome(app);
     mountPhotoGallery(app);
     mountDashboard(app);
@@ -989,6 +1003,9 @@ const server = app.listen(port, "0.0.0.0", async () => {
     mountKiosk(app);
     await mountExperiments(app);
     setReady();
+    setKioskDeliveryReady(true);
+    await sweepKioskDeliveries();
+    const terminalEffectsRecovered = await sweepPendingTerminalEffects();
     const IDLE_POLL_INTERVAL = 10_000;
     function startQueuePoller(label, worker) {
         async function poll() {
@@ -1024,10 +1041,16 @@ const server = app.listen(port, "0.0.0.0", async () => {
             await sweepStaleGenerating();
             await recoverStaleRelayJobs({ retryPendingEffects: !terminalSweepDue });
             await sweepVoiceDeliveries();
+            await sweepKioskDeliveries();
             await clearStaleRelayTargets();
             await sweepMissingOutputJobs();
         } finally { maintenanceRunning = false; }
     }, 30_000);
+
+    setInterval(() => {
+        sweepStaleKioskUploads().catch((error) =>
+            console.error(`⚠️  Kiosk upload cleanup failed: ${error.message}`));
+    }, 60 * 60 * 1000).unref();
 
     let voiceMaintenanceRunning = false;
     setInterval(async () => {

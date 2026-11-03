@@ -47,6 +47,21 @@ jobs:
             exit 1
           fi
 
+      - name: Validate SendGrid configuration
+        env:
+          SENDGRID_API_KEY: ${{ secrets.SENDGRID_API_KEY }}
+          SENDGRID_FROM_EMAIL: ${{ vars.SENDGRID_FROM_EMAIL }}
+        run: |
+          if [[ -n "$SENDGRID_API_KEY" && -z "$SENDGRID_FROM_EMAIL" ]] ||
+             [[ -z "$SENDGRID_API_KEY" && -n "$SENDGRID_FROM_EMAIL" ]]; then
+            echo "::error::Set both SENDGRID_API_KEY (GitHub secret) and SENDGRID_FROM_EMAIL (GitHub variable), or leave both unset to disable email."
+            exit 1
+          fi
+          if [[ -n "$SENDGRID_FROM_EMAIL" && ! "$SENDGRID_FROM_EMAIL" =~ ^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$ ]]; then
+            echo "::error::SENDGRID_FROM_EMAIL must be a valid email address."
+            exit 1
+          fi
+
       - name: Login to Azure
         uses: azure/login@v3
         with:
@@ -189,6 +204,12 @@ jobs:
           fi
 
       - name: Set secrets
+        env:
+          SENDGRID_API_KEY: ${{ secrets.SENDGRID_API_KEY }}
+          SENDGRID_FROM_EMAIL: ${{ vars.SENDGRID_FROM_EMAIL }}
+          SENDGRID_FROM_NAME: ${{ vars.SENDGRID_FROM_NAME }}
+          SENDGRID_EVENT_WEBHOOK_PUBLIC_KEY: ${{ vars.SENDGRID_EVENT_WEBHOOK_PUBLIC_KEY }}
+          SENDGRID_REGION: ${{ vars.SENDGRID_REGION }}
         run: |
           # Set app secrets first (does NOT create a new revision, preserves registry secret)
           az containerapp secret set \
@@ -205,6 +226,43 @@ jobs:
               "session-secret=${{ secrets.SESSION_SECRET }}" \
               "print-relay-key=${{ secrets.PRINT_RELAY_KEY }}" \
             --output none
+
+          # Keep SendGrid optional. The key is passed through the step environment,
+          # never interpolated into the workflow script or the rendered app YAML.
+          sendgrid_configured=false
+          sendgrid_from_name_configured=false
+          sendgrid_event_key_configured=false
+          sendgrid_region_configured=false
+          if [[ -n "$SENDGRID_API_KEY" ]]; then
+            sendgrid_secrets=(
+              "sendgrid-key=$SENDGRID_API_KEY"
+              "sendgrid-from-email=$SENDGRID_FROM_EMAIL"
+            )
+            if [[ -n "$SENDGRID_FROM_NAME" ]]; then
+              sendgrid_secrets+=("sendgrid-from-name=$SENDGRID_FROM_NAME")
+              sendgrid_from_name_configured=true
+            fi
+            if [[ -n "$SENDGRID_EVENT_WEBHOOK_PUBLIC_KEY" ]]; then
+              sendgrid_secrets+=("sendgrid-event-key=$SENDGRID_EVENT_WEBHOOK_PUBLIC_KEY")
+              sendgrid_event_key_configured=true
+            fi
+            if [[ -n "$SENDGRID_REGION" ]]; then
+              sendgrid_secrets+=("sendgrid-region=$SENDGRID_REGION")
+              sendgrid_region_configured=true
+            fi
+            az containerapp secret set \
+              --name ${{ env.APP_NAME }} \
+              --resource-group ${{ env.RESOURCE_GROUP }} \
+              --secrets "${sendgrid_secrets[@]}" \
+              --output none
+            sendgrid_configured=true
+          fi
+          {
+            echo "SENDGRID_CONFIGURED=$sendgrid_configured"
+            echo "SENDGRID_FROM_NAME_CONFIGURED=$sendgrid_from_name_configured"
+            echo "SENDGRID_EVENT_KEY_CONFIGURED=$sendgrid_event_key_configured"
+            echo "SENDGRID_REGION_CONFIGURED=$sendgrid_region_configured"
+          } >> "$GITHUB_ENV"
 
       - name: Deploy Container App
         # ALLOWED_EMAILS = non-@twilio.com sign-in escape hatch, a plain (non-secret)
@@ -252,6 +310,34 @@ jobs:
           # shellcheck disable=SC2016
           # Restrict substitution to our known vars so no other ${...} in the template is touched.
           envsubst '${APP_NAME} ${CONTAINER_IMAGE} ${BASE_URL} ${DEPLOYMENT_RUN_ID} ${ALLOWED_EMAILS} ${TWILIO_WHATSAPP_NUMBER} ${TWILIO_WHATSAPP_MESSAGING_SERVICE_SID} ${TWILIO_TEMPLATE_DELIVERY} ${TWILIO_TEMPLATE_RATING} ${TWILIO_TEMPLATE_PROMO} ${TWILIO_TEMPLATE_NUDGE} ${TWILIO_TEMPLATE_DELIVERY_PT_BR} ${TWILIO_TEMPLATE_RATING_PT_BR} ${TWILIO_TEMPLATE_PROMO_PT_BR} ${TWILIO_TEMPLATE_NUDGE_PT_BR}' < .github/containerapp.yaml > /tmp/containerapp.yaml
+
+          # Explicit empty values disable email and clear optional settings when
+          # their GitHub inputs are removed, even if Azure still holds old secrets.
+          python3 - /tmp/containerapp.yaml <<'PY'
+          import os
+          import sys
+          from pathlib import Path
+
+          path = Path(sys.argv[1])
+          marker = "          # SENDGRID_ENV_BINDINGS"
+          template = path.read_text()
+          if template.count(marker) != 1:
+              raise SystemExit("SendGrid environment marker missing or duplicated")
+
+          enabled = os.environ.get("SENDGRID_CONFIGURED") == "true"
+          bindings = (
+              ("SENDGRID_API_KEY", "sendgrid-key", enabled),
+              ("SENDGRID_FROM_EMAIL", "sendgrid-from-email", enabled),
+              ("SENDGRID_FROM_NAME", "sendgrid-from-name", enabled and os.environ.get("SENDGRID_FROM_NAME_CONFIGURED") == "true"),
+              ("SENDGRID_EVENT_WEBHOOK_PUBLIC_KEY", "sendgrid-event-key", enabled and os.environ.get("SENDGRID_EVENT_KEY_CONFIGURED") == "true"),
+              ("SENDGRID_REGION", "sendgrid-region", enabled and os.environ.get("SENDGRID_REGION_CONFIGURED") == "true"),
+          )
+          lines = []
+          for name, secret, configured in bindings:
+              lines.append(f"          - name: {name}")
+              lines.append(f"            secretRef: {secret}" if configured else '            value: ""')
+          path.write_text(template.replace(marker, "\n".join(lines)))
+          PY
 
           echo "Updating container app registry credentials..."
           az containerapp registry set \

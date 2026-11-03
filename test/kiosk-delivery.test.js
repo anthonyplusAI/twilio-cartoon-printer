@@ -1,31 +1,23 @@
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
+const crypto = require("node:crypto");
 const express = require("express");
 const fs = require("node:fs");
-const http = require("node:http");
 const os = require("node:os");
 const path = require("node:path");
-const vm = require("node:vm");
+const sharp = require("sharp");
 
 const { PENDING_DIR } = require("../lib/config");
-const channelRegistry = require("../lib/channels");
 const settings = require("../lib/settings");
+const kioskRequests = require("../lib/kiosk-requests");
 const kioskSubmissions = require("../lib/kiosk-submissions");
+const { makeKioskSessionToken } = require("../lib/auth");
 const { mountApiGenerate } = require("../lib/api-generate");
-const { buildKioskHtml } = require("../lib/kiosk");
 const { getKioskDeliveryChannels, resolveKioskDeliveryChannel } = require("../lib/kiosk-delivery");
-const { __jobAdapterForTest: jobAdapter } = require("../lib/queue");
 
-function dependencies({
-    sms = true,
-    whatsapp = true,
-    showSms = true,
-    showWhatsapp = true,
-    deliverySid = "HXdelivery",
-    enablePrinting = true,
-    immediateDigitalDelivery = true,
-} = {}) {
-    const eventSettings = { boothShowSms: showSms, boothShowWhatsapp: showWhatsapp, enablePrinting, immediateDigitalDelivery };
+function dependencies({ sms = true, whatsapp = true, email = true, showSms = true,
+    showWhatsapp = true, showEmail = true, deliverySid = "HXdelivery" } = {}) {
+    const eventSettings = { boothShowSms: showSms, boothShowWhatsapp: showWhatsapp, boothShowEmail: showEmail };
     return {
         settingsModule: {
             getForEvent: (key) => eventSettings[key],
@@ -35,189 +27,185 @@ function dependencies({
             sms: { isConfigured: () => sms },
             whatsapp: { isConfigured: () => whatsapp },
         },
+        emailProvider: { isConfigured: () => email },
     };
 }
 
-test("kiosk offers configured SMS and template-backed WhatsApp delivery", () => {
-    assert.deepEqual(getKioskDeliveryChannels("Event", "en", dependencies()), ["sms", "whatsapp"]);
-    assert.deepEqual(getKioskDeliveryChannels("Event", "en", dependencies({ deliverySid: "" })), ["sms"]);
-    assert.deepEqual(getKioskDeliveryChannels("Event", "en", dependencies({ immediateDigitalDelivery: false })), ["sms"]);
-    assert.deepEqual(getKioskDeliveryChannels("Event", "en", dependencies({ showSms: false })), ["whatsapp"]);
+test("kiosk offers only event-enabled, configured delivery methods", () => {
+    assert.deepEqual(getKioskDeliveryChannels("Event", "en", dependencies()), ["sms", "whatsapp", "email"]);
+    assert.deepEqual(getKioskDeliveryChannels("Event", "en", dependencies({ deliverySid: "" })), ["sms", "email"]);
+    assert.deepEqual(getKioskDeliveryChannels("Event", "en", dependencies({ showEmail: false })), ["sms", "whatsapp"]);
+    assert.deepEqual(getKioskDeliveryChannels("Event", "en", dependencies({ sms: false, whatsapp: false })), ["email"]);
 });
 
-test("kiosk requires an explicit choice when both delivery channels are available", () => {
-    assert.throws(() => resolveKioskDeliveryChannel({
-        requestedChannel: "",
-        hasPhone: true,
-        kioskSubmission: true,
-        eventName: "Event",
-        locale: "en",
-    }, dependencies()), (err) => err.status === 400 && /Choose SMS or WhatsApp/.test(err.message));
-
-    assert.equal(resolveKioskDeliveryChannel({
-        requestedChannel: "whatsapp",
-        hasPhone: true,
-        kioskSubmission: true,
-        eventName: "Event",
-        locale: "en",
-    }, dependencies()), "whatsapp");
+test("kiosk requires one matching destination and an explicit channel", () => {
+    const base = { eventName: "Event", locale: "en", kioskSubmission: true };
+    assert.throws(() => resolveKioskDeliveryChannel({ ...base, hasPhone: true, requestedChannel: "" }, dependencies()),
+        (error) => error.code === "CHANNEL_REQUIRED");
+    assert.throws(() => resolveKioskDeliveryChannel({ ...base, hasPhone: true, hasEmail: true, requestedChannel: "email" }, dependencies()),
+        (error) => error.code === "DESTINATION_INVALID");
+    assert.throws(() => resolveKioskDeliveryChannel({ ...base, hasEmail: true, requestedChannel: "sms" }, dependencies()),
+        (error) => error.code === "DESTINATION_INVALID");
+    assert.equal(resolveKioskDeliveryChannel({ ...base, hasEmail: true, requestedChannel: "email" }, dependencies()), "email");
+    assert.equal(resolveKioskDeliveryChannel({ ...base, hasPhone: true, requestedChannel: "whatsapp" }, dependencies()), "whatsapp");
+    assert.throws(() => resolveKioskDeliveryChannel({ ...base, hasPhone: true, requestedChannel: "whatsapp" },
+        dependencies({ deliverySid: "" })), (error) => error.code === "CHANNEL_UNAVAILABLE");
 });
 
-test("generate API keeps SMS compatibility and rejects unsafe WhatsApp delivery", () => {
-    assert.equal(resolveKioskDeliveryChannel({
-        requestedChannel: "",
-        hasPhone: true,
-        kioskSubmission: false,
-        eventName: "Event",
-        locale: "en",
-    }, dependencies()), "sms");
-
-    assert.throws(() => resolveKioskDeliveryChannel({
-        requestedChannel: "whatsapp",
-        hasPhone: true,
-        kioskSubmission: false,
-        eventName: "Event",
-        locale: "en",
-    }, dependencies({ deliverySid: "" })), (err) => err.status === 409 && /template/.test(err.message));
-
-    assert.equal(resolveKioskDeliveryChannel({
-        requestedChannel: "whatsapp",
-        hasPhone: false,
-        kioskSubmission: true,
-        eventName: "Event",
-        locale: "en",
-    }, dependencies()), null);
+test("programmatic generate keeps its existing SMS default", () => {
+    assert.equal(resolveKioskDeliveryChannel({ kioskSubmission: false, hasPhone: true, eventName: "Event", locale: "en" },
+        dependencies()), "sms");
+    assert.equal(resolveKioskDeliveryChannel({ kioskSubmission: false, hasPhone: false, eventName: "Event", locale: "en" },
+        dependencies()), null);
 });
 
-test("queued kiosk delivery never falls back to a different channel", () => {
-    const originalWhatsapp = channelRegistry.ADAPTERS.whatsapp.isConfigured;
-    const originalSms = channelRegistry.ADAPTERS.sms.isConfigured;
-    channelRegistry.ADAPTERS.whatsapp.isConfigured = () => false;
-    channelRegistry.ADAPTERS.sms.isConfigured = () => true;
-    try {
-        assert.throws(() => jobAdapter({ channel: "whatsapp", userPhone: "+14155551234" }), /not configured/);
-    } finally {
-        channelRegistry.ADAPTERS.whatsapp.isConfigured = originalWhatsapp;
-        channelRegistry.ADAPTERS.sms.isConfigured = originalSms;
-    }
-});
-
-test("kiosk renders localized SMS and WhatsApp delivery controls", () => {
-    const english = buildKioskHtml({
-        styleOptions: [{ key: "cartoon", name: "Cartoon" }],
-        eventName: "Event",
-        locale: "en",
-        deliveryChannels: ["sms", "whatsapp"],
-    });
-    assert.match(english, /name="deliveryChannel" value="sms"/);
-    assert.match(english, /name="deliveryChannel" value="whatsapp"/);
-    assert.match(english, /qs\.set\("channel", deliveryChannel\)/);
-    assert.match(english, /qs\.set\("kiosk", "1"\)/);
-    assert.match(english, /By choosing WhatsApp/);
-
-    const portuguese = buildKioskHtml({
-        styleOptions: [{ key: "cartoon", name: "Desenho" }],
-        eventName: "Evento",
-        locale: "pt_BR",
-        languageMode: "pt_BR",
-        deliveryChannels: ["sms", "whatsapp"],
-    });
-    assert.match(portuguese, /Enviar retrato por/);
-    assert.match(portuguese, /Ao escolher o WhatsApp/);
-    assert.doesNotMatch(portuguese, /By choosing WhatsApp/);
-    const script = portuguese.match(/<script>\nconst STYLES[\s\S]*?<\/script>/)[0].replace(/^<script>|<\/script>$/g, "");
-    assert.doesNotThrow(() => new vm.Script(script));
-});
-
-test("kiosk WhatsApp submission persists the selected job channel", async () => {
+test("kiosk POST stages privately, queues selected delivery, and deduplicates retries", async () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "kiosk-api-"));
     fs.mkdirSync(PENDING_DIR, { recursive: true });
-    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "kiosk-whatsapp-"));
-    const prefix = "29990102_030405";
-    const pendingPath = path.join(PENDING_DIR, `${prefix}.json`);
-    const fixedNow = new Date(2999, 0, 2, 3, 4, 5).getTime();
-    const originals = {
-        now: Date.now,
-        get: settings.get,
-        getForEvent: settings.getForEvent,
-        getContentSid: settings.getContentSid,
-        getActiveStyleList: settings.getActiveStyleList,
-        getActiveStyles: settings.getActiveStyles,
-        getDownloadDir: settings.getDownloadDir,
-        getOutputProfile: settings.getOutputProfile,
-        addSubmission: kioskSubmissions.add,
+    const submissions = [];
+    const prefixes = [];
+    const requestIds = [];
+    const original = {
+        get: settings.get, getForEvent: settings.getForEvent, getContentSid: settings.getContentSid,
+        getActiveStyleList: settings.getActiveStyleList, getActiveStyles: settings.getActiveStyles,
+        getDownloadDir: settings.getDownloadDir, getOutputProfile: settings.getOutputProfile,
+        add: kioskSubmissions.add,
+        baseUrl: process.env.BASE_URL,
+        sendgridKey: process.env.SENDGRID_API_KEY,
+        sendgridFrom: process.env.SENDGRID_FROM_EMAIL,
     };
-    let submission = null;
     let server;
-
-    Date.now = () => fixedNow;
-    settings.get = (key, ...args) => {
-        if (key === "eventName") return "__kiosk_whatsapp_test__";
-        if (key === "adminPhones") return [];
-        if (key === "twilioWhatsappNumber") return "+14155550100";
-        if (key === "twilioWhatsappMessagingServiceSid") return "";
-        if (key === "twilioPhoneNumber") return "+14155550200";
-        if (key === "twilioMessagingServiceSid") return "";
-        return originals.get.call(settings, key, ...args);
-    };
+    settings.get = (key, ...args) => ({
+        eventName: "KioskEvent", adminPhones: [], twilioWhatsappNumber: "+14155550100",
+        twilioPhoneNumber: "+14155550200", customBrands: {}, disabledBrands: [],
+        enableBrandMenu: false, enableBackgroundMenu: false, offerUnbranded: true,
+        backgroundChoices: [],
+    })[key] ?? original.get.call(settings, key, ...args);
     settings.getForEvent = (key) => ({
-        languageMode: "en",
-        boothShowSms: true,
-        boothShowWhatsapp: true,
-        enablePrinting: false,
-        immediateDigitalDelivery: true,
-        reviewMode: "off",
-        enableManualReview: false,
-        variantsPerReview: 1,
-    })[key];
-    settings.getContentSid = (key, locale) => key === "delivery" && locale === "en" ? "HXdelivery" : null;
+        languageMode: "en", boothShowSms: true, boothShowWhatsapp: true, boothShowEmail: true,
+        enablePrinting: true, immediateDigitalDelivery: false, reviewMode: "off",
+        enableManualReview: false, variantsPerReview: 1, maxPrints: 1,
+    })[key] ?? original.getForEvent.call(settings, key, "KioskEvent");
+    settings.getContentSid = (key) => key === "delivery" ? "HXdelivery" : null;
     settings.getActiveStyleList = () => ["cartoon"];
-    settings.getActiveStyles = () => ({ cartoon: { name: "Cartoon" } });
+    settings.getActiveStyles = () => ({ cartoon: { name: "Cartoon", prompt: "Cartoon prompt" } });
     settings.getDownloadDir = () => tempDir;
     settings.getOutputProfile = () => ({ printSize: "6x4", printQuality: "high", orientation: "landscape" });
-    kioskSubmissions.add = (record) => { submission = record; return record; };
+    kioskSubmissions.add = (record) => { submissions.push(record); return record; };
+    process.env.SENDGRID_API_KEY = "SG.test";
+    process.env.SENDGRID_FROM_EMAIL = "booth@example.com";
+    process.env.BASE_URL = "https://booth.example.test/";
 
     try {
         const app = express();
         mountApiGenerate(app);
-        server = await new Promise((resolve) => {
-            const listening = app.listen(0, () => resolve(listening));
+        server = await new Promise((resolve, reject) => {
+            const listening = app.listen(0, "127.0.0.1", () => resolve(listening));
+            listening.on("error", reject);
         });
-        const image = Buffer.from([0xff, 0xd8, 0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
-        const response = await new Promise((resolve, reject) => {
-            const req = http.request({
-                port: server.address().port,
-                method: "POST",
-                path: "/api/generate?style=cartoon&phone=%2B14155551234&channel=whatsapp&kiosk=1&locale=en",
-                headers: { "content-type": "image/jpeg", "content-length": image.length },
-            }, (res) => {
-                let body = "";
-                res.on("data", (chunk) => { body += chunk; });
-                res.on("end", () => resolve({ status: res.statusCode, body: JSON.parse(body) }));
+        const image = await sharp({ create: { width: 24, height: 24, channels: 3, background: "white" } })
+            .jpeg().toBuffer();
+        const kioskCookie = `kiosk_session=${makeKioskSessionToken("KioskEvent")}`;
+        const submit = async (fields) => {
+            const form = new FormData();
+            form.append("image", new Blob([image], { type: "image/jpeg" }), "selfie.jpg");
+            for (const [key, value] of Object.entries(fields)) form.append(key, value);
+            const response = await fetch(`http://127.0.0.1:${server.address().port}/api/generate`, {
+                method: "POST", body: form, headers: { Cookie: kioskCookie },
             });
-            req.on("error", reject);
-            req.end(image);
-        });
-
-        assert.equal(response.status, 202);
-        assert.equal(response.body.filePrefix, prefix);
-        const job = JSON.parse(fs.readFileSync(pendingPath, "utf8"));
+            return { status: response.status, body: await response.json() };
+        };
+        const phone = "+14155559987";
+        const firstId = crypto.randomUUID();
+        requestIds.push(firstId);
+        const whatsapp = {
+            event: "KioskEvent", kiosk: "1", requestId: firstId, consent: "1", whatsappOptIn: "1",
+            style: "cartoon", channel: "whatsapp", phone, locale: "en",
+        };
+        const first = await submit(whatsapp);
+        assert.equal(first.status, 202, JSON.stringify(first.body));
+        prefixes.push(first.body.filePrefix);
+        assert.match(first.body.filePrefix, /^\d{8}_\d{6}_[a-f0-9]+$/);
+        const job = JSON.parse(fs.readFileSync(path.join(PENDING_DIR, `${first.body.filePrefix}.json`), "utf8"));
         assert.equal(job.channel, "whatsapp");
+        assert.equal(job.baseUrl, "https://booth.example.test");
+        assert.equal(job.userPhone, phone);
         assert.equal(job.kioskSubmission, true);
-        assert.equal(job.userPhone, "+14155551234");
-        assert.equal(job.appPhone, "+14155550100");
-        assert.equal(submission.channel, "whatsapp");
+        assert.equal(job.imageUrl, "");
+        assert.equal(job.kioskEventSnapshot.eventSettings.immediateDigitalDelivery, true);
+        assert.equal(job.kioskEventSnapshot.eventSettings.enablePrinting, true);
+        assert.equal(fs.existsSync(path.join(tempDir, ".staging", `${first.body.filePrefix}_input.jpg`)), true);
+        assert.equal(fs.existsSync(path.join(tempDir, `${first.body.filePrefix}_input.jpg`)), false);
+        assert.equal(fs.existsSync(path.join(__dirname, "..", "data", "kiosk-uploads", `${firstId}.jpg`)), false);
+        assert.equal(submissions[0].whatsappOptInAt > 0, true);
+
+        const repeated = await submit(whatsapp);
+        assert.equal(repeated.status, 202);
+        assert.equal(repeated.body.filePrefix, first.body.filePrefix);
+        assert.equal(submissions.length, 1);
+        const quotaId = crypto.randomUUID();
+        requestIds.push(quotaId);
+        const quota = await submit({ ...whatsapp, requestId: quotaId });
+        assert.equal(quota.status, 429);
+        assert.equal(quota.body.code, "QUOTA_REACHED");
+
+        const emailId = crypto.randomUUID();
+        requestIds.push(emailId);
+        const emailed = await submit({
+            event: "KioskEvent", kiosk: "1", requestId: emailId, consent: "1",
+            style: "cartoon", channel: "email", email: "guest@example.com", locale: "en",
+        });
+        assert.equal(emailed.status, 202, JSON.stringify(emailed.body));
+        prefixes.push(emailed.body.filePrefix);
+        const emailJob = JSON.parse(fs.readFileSync(path.join(PENDING_DIR, `${emailed.body.filePrefix}.json`), "utf8"));
+        assert.equal(emailJob.kioskEmail, "guest@example.com");
+        assert.notEqual(emailJob.noDelivery, true);
+        assert.equal(emailJob.channel, "email");
+        assert.match(emailJob.userPhone, /^api:email:[a-f0-9]{64}$/);
+        const emailQuotaId = crypto.randomUUID();
+        requestIds.push(emailQuotaId);
+        const emailQuota = await submit({
+            event: "KioskEvent", kiosk: "1", requestId: emailQuotaId, consent: "1",
+            style: "cartoon", channel: "email", email: "GUEST@example.com", locale: "en",
+        });
+        assert.equal(emailQuota.status, 429);
+        assert.equal(emailQuota.body.code, "QUOTA_REACHED");
+
+        const missingOptInId = crypto.randomUUID();
+        requestIds.push(missingOptInId);
+        const missingOptIn = await submit({ ...whatsapp, requestId: missingOptInId, whatsappOptIn: "0", phone: "+14155559988" });
+        assert.equal(missingOptIn.status, 400);
+        assert.equal(missingOptIn.body.code, "WHATSAPP_OPT_IN_REQUIRED");
+        const changed = await submit({ ...whatsapp, requestId: crypto.randomUUID(), event: "OtherEvent" });
+        assert.equal(changed.status, 409);
+        assert.equal(changed.body.code, "EVENT_CHANGED");
+
+        const unauthorizedForm = new FormData();
+        unauthorizedForm.append("image", new Blob([image], { type: "image/jpeg" }), "selfie.jpg");
+        unauthorizedForm.append("kiosk", "1");
+        const unauthorized = await fetch(`http://127.0.0.1:${server.address().port}/api/generate`, {
+            method: "POST", body: unauthorizedForm,
+        });
+        assert.equal(unauthorized.status, 401);
+        assert.equal((await unauthorized.json()).code, "KIOSK_SESSION_EXPIRED");
     } finally {
         if (server) await new Promise((resolve) => server.close(resolve));
-        Date.now = originals.now;
-        settings.get = originals.get;
-        settings.getForEvent = originals.getForEvent;
-        settings.getContentSid = originals.getContentSid;
-        settings.getActiveStyleList = originals.getActiveStyleList;
-        settings.getActiveStyles = originals.getActiveStyles;
-        settings.getDownloadDir = originals.getDownloadDir;
-        settings.getOutputProfile = originals.getOutputProfile;
-        kioskSubmissions.add = originals.addSubmission;
-        fs.rmSync(pendingPath, { force: true });
+        settings.get = original.get;
+        settings.getForEvent = original.getForEvent;
+        settings.getContentSid = original.getContentSid;
+        settings.getActiveStyleList = original.getActiveStyleList;
+        settings.getActiveStyles = original.getActiveStyles;
+        settings.getDownloadDir = original.getDownloadDir;
+        settings.getOutputProfile = original.getOutputProfile;
+        kioskSubmissions.add = original.add;
+        if (original.baseUrl === undefined) delete process.env.BASE_URL;
+        else process.env.BASE_URL = original.baseUrl;
+        if (original.sendgridKey === undefined) delete process.env.SENDGRID_API_KEY;
+        else process.env.SENDGRID_API_KEY = original.sendgridKey;
+        if (original.sendgridFrom === undefined) delete process.env.SENDGRID_FROM_EMAIL;
+        else process.env.SENDGRID_FROM_EMAIL = original.sendgridFrom;
+        for (const prefix of prefixes) fs.rmSync(path.join(PENDING_DIR, `${prefix}.json`), { force: true });
+        for (const id of requestIds) fs.rmSync(kioskRequests.requestPath(id), { force: true });
         fs.rmSync(tempDir, { recursive: true, force: true });
     }
 });

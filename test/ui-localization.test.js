@@ -59,7 +59,8 @@ test("Portuguese kiosk renders localized controls and style labels", () => {
     assert.match(html, /lang="pt-BR"/);
     assert.match(html, /Tire uma selfie/);
     assert.match(html, /Aquarela/);
-    assert.match(html, /qs\.set\("locale", "pt_BR"\)/);
+    assert.match(html, /const LOCALE = "pt_BR";/);
+    assert.match(html, /form\.append\("locale", LOCALE\)/);
     assert.doesNotMatch(html, /Thanks! We're on it|Your portrait is generating now|Tap "Start camera" to begin/);
     const script = html.match(/<script>\nconst STYLES[\s\S]*?<\/script>/)[0].replace(/^<script>|<\/script>$/g, "");
     assert.doesNotThrow(() => new vm.Script(script));
