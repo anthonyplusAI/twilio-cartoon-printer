@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="{{LANG}}" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>{{TITLE}}</title>
+<link rel="icon" type="image/svg+xml" href="/assets/icon-twilio-bug-red.svg">
+<link rel="stylesheet" href="/assets/twilio-brand.css">
+<style>
+  * { box-sizing: border-box; }
+  html, body { min-height: 100%; }
+  body {
+    margin: 0; padding: 30px 20px 56px;
+    background: var(--th-bg); color: var(--th-text);
+    font-family: 'Twilio Sans Text', system-ui, sans-serif;
+    display: flex; flex-direction: column; align-items: center;
+  }
+  body::before {
+    content: ''; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+    background: radial-gradient(ellipse 60% 50% at 50% 25%, rgba(239,34,58,.06), transparent 70%);
+  }
+  .kiosk-header { width: min(640px, 100%); text-align: center; margin-bottom: 20px; }
+  .logo { width: 46px; height: 46px; display: block; margin: 0 auto 10px; }
+  .logo img { width: 100%; height: 100%; }
+  h1 { font-family: 'Twilio Sans Display', system-ui, sans-serif; font-size: clamp(28px, 6vw, 36px); margin: 0; }
+  .event-tag { margin: 5px 0 0; color: var(--th-text-dim); font-size: 13px; font-weight: 600; }
+  .language-picker { display: flex; justify-content: center; gap: 12px; margin-top: 14px; font-size: 13px; }
+  .language-picker a { color: var(--th-text-dim); }
+  .language-picker a[aria-current="page"] { color: var(--brand-red); font-weight: 800; }
+  .stage {
+    width: min(640px, 100%); aspect-ratio: 4/3; position: relative; overflow: hidden;
+    background: var(--th-input); border: 1px solid var(--th-card-border);
+    border-radius: 16px; box-shadow: 0 20px 60px var(--th-card-shadow);
+  }
+  video, canvas, .preview { width: 100%; height: 100%; display: block; object-fit: cover; }
+  video { transform: scaleX(-1); }
+  .countdown {
+    position: absolute; inset: 0; display: none; place-items: center;
+    background: rgba(0,13,37,.35); color: var(--brand-red);
+    font: 800 clamp(96px, 20vw, 180px) 'Twilio Sans Display', system-ui, sans-serif;
+    text-shadow: 0 4px 28px rgba(0,0,0,.7); pointer-events: none;
+  }
+  .countdown.on { display: grid; }
+  .status {
+    width: min(640px, 100%); min-height: 24px; margin-top: 17px;
+    color: var(--th-text-dim); text-align: center; font-size: 15px; line-height: 1.4;
+  }
+  .status:focus { outline: none; }
+  .controls { display: flex; justify-content: center; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+  .btn {
+    border: 0; border-radius: 8px; padding: 12px 20px;
+    background: var(--brand-red); color: #fff; cursor: pointer;
+    font: 700 15px 'Twilio Sans Text', system-ui, sans-serif;
+  }
+  .btn:hover { background: var(--brand-red-hover); }
+  .btn:disabled { opacity: .42; cursor: not-allowed; }
+  .btn.secondary { color: var(--th-text); background: var(--th-card); border: 1px solid var(--th-card-border); }
+  .btn.secondary:hover { background: var(--th-card-hover); }
+  .btn:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible {
+    outline: 3px solid var(--brand-red); outline-offset: 2px;
+  }
+  .review-panel { width: min(640px, 100%); margin-top: 18px; }
+  .review-panel h2 { margin: 0 0 15px; font: 800 21px 'Twilio Sans Display', system-ui, sans-serif; text-align: center; }
+  .choice-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+  .field { display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 700; }
+  input[type="email"], input[type="tel"], select {
+    width: 100%; min-height: 44px; border: 1px solid var(--th-input-border);
+    border-radius: 8px; padding: 9px 11px; color: var(--th-text);
+    background: var(--th-input); font: 15px 'Twilio Sans Text', system-ui, sans-serif;
+  }
+  .delivery-channel { margin: 18px 0 0; padding: 0; border: 0; }
+  .delivery-channel legend { width: 100%; text-align: center; margin-bottom: 9px; font-size: 13px; font-weight: 700; }
+  .delivery-options { display: flex; flex-wrap: wrap; justify-content: center; gap: 9px; }
+  .delivery-option { position: relative; cursor: pointer; }
+  .delivery-option input { position: absolute; opacity: 0; }
+  .delivery-option span {
+    display: block; min-width: 120px; padding: 10px 16px; text-align: center;
+    background: var(--th-card); border: 1px solid var(--th-card-border);
+    border-radius: 8px; font-weight: 700;
+  }
+  .delivery-option input:checked + span { background: rgba(239,34,58,.12); border-color: var(--brand-red); }
+  .delivery-option input:focus-visible + span { outline: 3px solid var(--brand-red); outline-offset: 2px; }
+  .destination { margin-top: 14px; }
+  .check-row {
+    display: flex; align-items: flex-start; gap: 10px;
+    margin: 14px 0 0; font-size: 13px; line-height: 1.5;
+  }
+  .check-row input { flex: 0 0 auto; width: 18px; height: 18px; margin-top: 1px; accent-color: var(--brand-red); }
+  .notice {
+    margin: 18px 0 0; padding: 14px 16px; border: 1px solid var(--th-card-border);
+    border-radius: 10px; background: var(--th-card); color: var(--th-text-dim);
+    font-size: 13px; line-height: 1.5;
+  }
+  .notice p { margin: 0 0 10px; }
+  .notice a { color: var(--th-text); }
+  .notice .check-row { color: var(--th-text); }
+  .done-card {
+    width: min(640px, 100%); margin-top: 8px; padding: 32px 24px; text-align: center;
+    border: 1px solid var(--th-card-border); border-radius: 16px;
+    background: var(--th-card); box-shadow: 0 20px 60px var(--th-card-shadow);
+  }
+  .done-card h2 { margin: 0 0 10px; font: 800 27px 'Twilio Sans Display', system-ui, sans-serif; }
+  .done-card p { color: var(--th-text-dim); margin: 6px 0; line-height: 1.5; }
+  .hidden { display: none !important; }
+  @media (max-width: 520px) {
+    body { padding: 22px 14px 40px; }
+    .delivery-option span { min-width: 92px; }
+  }
+</style>
+</head>
+<body>
+<header class="kiosk-header">
+  <div class="logo"><img src="/assets/icon-twilio-bug-red.svg" alt="Twilio"></div>
+  <h1>{{HEADER}}</h1>
+  <p class="event-tag">{{EVENT}}</p>
+  {{LANGUAGE_PICKER}}
+</header>
+<div class="stage" id="stage">
+  <video id="video" autoplay playsinline muted></video>
+  <canvas id="canvas" class="hidden"></canvas>
+  <img id="preview" class="preview hidden" alt="{{CAPTURED_SELFIE}}">
+  <div id="countdown" class="countdown" aria-hidden="true"></div>
+</div>
+<div id="status" class="status" role="status" aria-live="polite" aria-atomic="true" tabindex="-1">{{START_PROMPT}}</div>
+<div class="controls" id="controls-capture">
+  <button class="btn" id="startBtn" type="button">{{START_CAMERA}}</button>
+  <button class="btn" id="snapBtn" type="button" disabled>{{TAKE_PHOTO}}</button>
+</div>
+<section class="review-panel hidden" id="review-panel" aria-labelledby="review-title">
+  <h2 id="review-title">{{REVIEW_TITLE}}</h2>
+  <div class="choice-grid">
+    <label class="field" id="style-field">{{ART_STYLE}}<select id="styleSel"></select></label>
+    <label class="field hidden" id="brand-field">{{BRAND_STYLE}}<select id="brandSel"></select></label>
+    <label class="field hidden" id="background-field">{{BACKGROUND_STYLE}}<select id="backgroundSel"></select></label>
+  </div>
+  <fieldset class="delivery-channel">
+    <legend>{{DELIVERY_METHOD}}</legend>
+    <div class="delivery-options">{{DELIVERY_OPTIONS}}</div>
+  </fieldset>
+  <div class="destination">
+    <label class="field hidden" id="phone-field">{{PHONE_LABEL}}
+      <input id="phoneInput" type="tel" inputmode="tel" placeholder="+14155551234"
+        autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
+    </label>
+    <label class="field hidden" id="email-field">{{EMAIL_LABEL}}
+      <input id="emailInput" type="email" inputmode="email" placeholder="you@example.com"
+        autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
+    </label>
+  </div>
+  <label class="check-row hidden" id="whatsapp-opt-in-row">
+    <input id="whatsappOptIn" type="checkbox"><span>{{WHATSAPP_OPT_IN}}</span>
+  </label>
+  <div class="notice">
+    <p>{{PARTICIPATION_NOTICE}} <a href="{{NOTICE_HREF}}" target="_blank" rel="noopener noreferrer">{{NOTICE_LINK}}</a></p>
+    <label class="check-row"><input id="consentInput" type="checkbox"><span>{{PARTICIPATION_CHECK}}</span></label>
+  </div>
+  <div class="controls" id="controls-confirm">
+    <button class="btn" id="confirmBtn" type="button">{{GENERATE}}</button>
+    <button class="btn secondary" id="retakeBtn" type="button">{{RETAKE}}</button>
+    <button class="btn secondary hidden" id="cancelBtn" type="button">{{CANCEL_UPLOAD}}</button>
+  </div>
+</section>
+<section class="done-card hidden" id="done-card" aria-labelledby="done-title">
+  <h2 id="done-title" tabindex="-1">{{SUBMITTED_TITLE}}</h2>
+  <p id="done-detail"></p>
+  <div class="controls"><button class="btn" id="againBtn" type="button">{{START_OVER}}</button></div>
+</section>
+<script>
+{{SCRIPT}}
+</script>
+</body>
+</html>

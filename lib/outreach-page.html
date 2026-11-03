@@ -81,11 +81,11 @@
       </section>
 
       <section class="workspace-view" id="view-kiosk" role="tabpanel" aria-labelledby="tab-kiosk" hidden>
-        <div class="view-intro"><div><h2>Kiosk submissions</h2><p>Check portrait delivery details. Edit an email address or mark a manual follow-up complete.</p></div><span class="view-count" id="kioskCount">Load this view to see submissions</span></div>
+        <div class="view-intro"><div><h2>Kiosk submissions</h2><p>Check delivery and print status, edit contact email, and mark manual follow-up complete. Status refreshes every 30 seconds.</p></div><span class="view-count" id="kioskCount">Load this view to see submissions</span></div>
         <section class="surface data-surface" aria-labelledby="kioskTitle">
           <div class="surface-head"><div><h3 id="kioskTitle">Portrait contacts</h3><p>Edits save when you leave the email field</p></div></div>
-          <div class="list-toolbar"><label class="search-field"><span class="sr-only">Search kiosk submissions</span><input id="search-kiosk" type="search" placeholder="Search phone, email, style, or event" autocomplete="off"></label></div>
-          <div class="table-scroll"><table class="data-table kiosk-table"><thead><tr><th>Portrait</th><th>Phone</th><th>Email</th><th>Style</th><th>Submitted</th><th>Emailed</th><th><span class="sr-only">Actions</span></th></tr></thead><tbody id="kioskSubsBody"><tr><td colspan="7" class="table-state">Open Kiosk to load submissions</td></tr></tbody></table></div>
+          <div class="list-toolbar"><label class="search-field"><span class="sr-only">Search kiosk submissions</span><input id="search-kiosk" type="search" placeholder="Search phone, email, style, or event" autocomplete="off"></label><button type="button" class="secondary-button" id="refreshKiosk">Refresh status</button></div>
+          <div class="table-scroll"><table class="data-table kiosk-table"><thead><tr><th>Portrait</th><th>Phone</th><th>Email</th><th>Style</th><th>Submitted</th><th>Delivery and print</th><th>Emailed</th><th><span class="sr-only">Actions</span></th></tr></thead><tbody id="kioskSubsBody"><tr><td colspan="8" class="table-state">Open Kiosk to load submissions</td></tr></tbody></table></div>
           <div class="pager" id="pager-kiosk"></div>
         </section>
       </section>

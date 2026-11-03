@@ -204,7 +204,30 @@ test("send: returns error object when Twilio API throws", async () => {
     twilioStub.messages.create = async () => { throw new Error("Rate limit"); };
     const result = await messaging.send("+14155551234", "enqueued", {}, { adapter: smsAdapter });
     assert.equal(result.error, "Rate limit");
+    assert.equal(result.uncertain, true);
     twilioStub.messages.create = originalCreate;
+});
+
+test("send: distinguishes rejected requests from ambiguous Twilio responses", async () => {
+    const originalCreate = twilioStub.messages.create;
+    try {
+        twilioStub.messages.create = async () => { throw Object.assign(new Error("rate limited"), { status: 429 }); };
+        const rateLimited = await messaging.send("+14155551234", "enqueued", {}, { adapter: smsAdapter });
+        assert.equal(rateLimited.retryable, true);
+        assert.equal(rateLimited.uncertain, false);
+
+        twilioStub.messages.create = async () => { throw Object.assign(new Error("invalid recipient"), { status: 400 }); };
+        const invalid = await messaging.send("+14155551234", "enqueued", {}, { adapter: smsAdapter });
+        assert.equal(invalid.retryable, false);
+        assert.equal(invalid.uncertain, false);
+
+        twilioStub.messages.create = async () => { throw Object.assign(new Error("server error"), { status: 503 }); };
+        const serverError = await messaging.send("+14155551234", "enqueued", {}, { adapter: smsAdapter });
+        assert.equal(serverError.retryable, false);
+        assert.equal(serverError.uncertain, true);
+    } finally {
+        twilioStub.messages.create = originalCreate;
+    }
 });
 
 test("getFallbackCounts: increments counter on each template fallback", async () => {

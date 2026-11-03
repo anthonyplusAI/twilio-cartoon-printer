@@ -168,9 +168,10 @@ test("Home is an operator hub with event-scoped status and direct tool links", (
     assert.match(html, /review-count\?e=Demo%20%26%20Friends/);
     assert.match(html, /id="reviewNotify"/);
     assert.match(html, /<dd class="paused">Paused<\/dd>/);
-    for (const route of ["/dashboard/", "/photogallery/", "/outreach/", "/home/settings", "/home/combo", "/kiosk"]) {
+    for (const route of ["/dashboard/", "/photogallery/", "/outreach/", "/home/settings", "/home/combo", "/kiosk/launch"]) {
         assert.ok(html.includes(`href="${route}"`), `${route} remains directly reachable`);
     }
+    assert.match(html, /Camera kiosk \(signs out admin\)/);
     assert.doesNotMatch(html, /id="settingsPanel"|id="sTwilioSid"|id="sModelOrch"/);
     const noVideo = buildHomeHtml({ getSetting: (key) => ({ ...values, videoFile: "" })[key] });
     assert.match(noVideo, /Gallery only/);

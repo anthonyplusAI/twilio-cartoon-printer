@@ -11,6 +11,7 @@ This is different from `GUIDE.md` — that one is a feature manual for operators
 - [Tech stack](#tech-stack)
 - [Why these choices?](#why-these-choices)
 - [How a photo flows through the system](#how-a-photo-flows-through-the-system)
+  - [The V1 kiosk path](#the-v1-kiosk-path)
 - [The job queue](#the-job-queue)
 - [The generation pipeline](#the-generation-pipeline)
 - [Printing: local vs cloud-with-relay](#printing-local-vs-cloud-with-relay)
@@ -63,6 +64,7 @@ There is no database, no Redis, no message broker. **Everything is files on disk
 |---|---|---|
 | **Runtime** | Node.js 22+ + Express 5 | Easy async I/O for a lot of concurrent small operations (downloads, API calls, file renames). Low operational overhead. |
 | **SMS/MMS** | Twilio | The obvious choice — it's literally in the product name. Handles the carrier mess for us. |
+| **Kiosk email** | Twilio SendGrid Mail Send API | Sends the finished portrait as an attachment when a verified sender and API key are configured. |
 | **AI image generation** | OpenAI (`gpt-image-2` primarily, `gpt-image-1.5` for transparent-background mode) | Best quality for stylized portraits with character preservation. |
 | **AI orchestration** | OpenAI (`gpt-5.5` by default, `gpt-5.4-nano` for lightweight vision/reply work) | For content moderation-adjacent checks, face detection, scene analysis, AI review, reference analysis, and smart replies to text-only messages. |
 | **Image processing** | Sharp (libvips) | Fast, well-maintained, handles weird phone JPEGs gracefully. |
@@ -103,6 +105,14 @@ This is the single most useful mental model. Follow one photo from text message 
 6. **Pipeline runs** (see the next section). On success, the output lands in `downloads/<eventName>/<prefix>_output.png`, and the job moves to one of three places based on configuration: `review/` (human or AI review), `ready/` (printing enabled), or `done/` (digital-only).
 7. **Printing (if enabled).** Either the local print worker (local mode) or the Print Station relay (cloud mode) picks up jobs from `ready/`, prints them, and moves them to `done/`.
 8. **SMS delivery.** In Print + Digital mode, immediate digital delivery is enabled by default, so the user usually receives the MMS or share link right after generation while printing continues. If that setting is disabled, delivery waits for print completion. Digital-only jobs deliver immediately after generation.
+
+### The V1 kiosk path
+
+The camera kiosk uses the same queue, generation, review, photo book, and print pipeline. An admin launches `/kiosk`, which issues a 24-hour, event-bound `kiosk_session` cookie and clears the full admin cookie in that browser profile. The narrow session can read the kiosk page and submit kiosk portraits, but cannot enter the admin workspace. Staff relaunch after an event switch or session expiry; they should use a separate browser profile or device for ongoing admin work. The guest flow is capture → preview or retake → active event style/brand/background choices → one SMS, WhatsApp, or SendGrid email destination → explicit AI/public photo-book consent. WhatsApp adds its own opt-in. The server validates the selected options and active event again at submission; a client-supplied request ID lets a retry return the original job instead of creating a second portrait.
+
+The uploaded selfie is copied into private staging before the job becomes visible to workers. The job snapshots the chosen style and prompt settings so an operator edit does not silently change a queued portrait. Once generated and approved, the public output moves to `downloads/<eventName>/` for the photo book; the kiosk original is removed. When printing is enabled, the job enters `ready/` for the local printer or Print Relay just like an SMS/WhatsApp job. Kiosk digital delivery starts as soon as the output is ready, independently of printing, and print completion does not send another copy.
+
+Delivery has its own state on the job: `pending`, `sending`, `retry`, `accepted`, `delivered`, `failed`, or `uncertain`. Twilio's signed status callback can confirm SMS/WhatsApp delivery or failure. SendGrid's Mail Send response confirms provider acceptance; an optional signed Event Webhook confirms later email delivery, bounce, or drop. Explicit rate limits are retried with a limit. A network/server error or interrupted provider request is marked `uncertain` so an automatic resend does not risk a duplicate. Kiosk jobs skip the SMS lead, promo, and NPS follow-ups because kiosk consent covers this portrait delivery only.
 9. **Optional follow-ups.** Promo message 15 seconds later; NPS survey after their last allowed portrait.
 
 Each step is fully independent. If the printer is down, generations keep queuing. If OpenAI is rate-limited, already-generated jobs keep printing. The filesystem queue decouples everything.
@@ -185,7 +195,10 @@ The main routes are:
 | `/review` | Token/PIN-based review flow for staff. |
 | `/review/settings` | Review settings, including Review PIN replacement and removal. |
 | `/api/generate` | Programmatic generation endpoint used by kiosk/API clients. |
-| `/kiosk` | Browser kiosk submission surface. |
+| `/kiosk` | Browser camera kiosk reached through a narrow kiosk session. |
+| `/kiosk/launch` | Admin-only session handoff into the event-bound kiosk session. |
+| `/api/kiosk-delivery/twilio-status/:prefix` | Signed Twilio callback for kiosk message delivery state. |
+| `/api/kiosk-delivery/sendgrid-events` | Signed SendGrid Event Webhook for kiosk email delivery state. |
 | `/eval` | Prompt experiment and evaluation tools. |
 | `/api/print-relay/*` | Relay polling, claim, heartbeat, image, complete, and reprint API. |
 | `/auth/*` | Google OAuth login/callback/logout. |
@@ -193,7 +206,7 @@ The main routes are:
 
 **The Settings page at `/home/settings` is the configuration hub.** Its navigation has Event, Portrait, Delivery, Booth display, Messaging, and Advanced, plus a separate Reset & data area. Operators can search settings, edit fields, and click **Save changes**; saved edits take effect immediately. Overrides persist to `data/settings.json`; per-event values also persist to the active event profile. Switching events requires the **Switch event** button and warns before discarding unsaved edits. Advanced shows credential status, Twilio routing IDs, and model choices. OpenAI, Twilio auth, and print relay secrets are changed in deployment configuration; the Review PIN is replaced at `/review/settings`.
 
-**Authentication supports Google OAuth and a shared admin PIN.** Non-public admin routes are gated by `requireAuth()` and accept either method through the same signed session cookie. Configure complete Google credentials, a valid `ADMIN_PIN`, or both; with neither, admin pages return `503` and admin API calls return `401`. Verified `@twilio.com` Google accounts are allowed by default; `ALLOWED_EMAILS` adds individual non-Twilio operators. Public routes remain public by design: `/inbound`, `/healthz`, `/auth/*`, `/review/*`, `/s/*`, approved images/assets/booth uploads, relay endpoints protected by `x-relay-key`, and approved read-only `GET` photo gallery routes. Staged image routes accept only a full admin session or credential-bound review token.
+**Authentication supports Google OAuth and a shared admin PIN.** Non-public admin routes are gated by `requireAuth()` and accept either method through the same signed session cookie. Configure complete Google credentials, a valid `ADMIN_PIN`, or both; with neither, admin pages return `503` and admin API calls return `401`. Verified `@twilio.com` Google accounts are allowed by default; `ALLOWED_EMAILS` adds individual non-Twilio operators. Launching `/kiosk` replaces that browser's full admin cookie with a narrower, event-bound kiosk cookie; other admin routes remain unavailable to that session. Public routes remain public by design: `/inbound`, `/healthz`, `/auth/*`, `/review/*`, `/s/*`, approved images/assets/booth uploads, relay endpoints protected by `x-relay-key`, and approved read-only `GET` photo gallery routes. Staged image routes accept only a full admin session or credential-bound review token.
 
 ## Deployment
 
@@ -375,10 +388,13 @@ A: The admin UI is a handful of low-traffic pages. Adding a framework would mean
 A: Simplicity. Webhook, workers, dashboard, all share memory. You can see the state by looking at one PID. If you split workers into separate services you'd add deployment complexity and inter-service communication for questionable gain. The in-process approach limits horizontal scale, but that's a concession, not an oversight.
 
 **Q: Is the app safe to expose to the internet?**
-A: Admin pages are protected by Google OAuth, and relay APIs require `x-relay-key`. The `/inbound` webhook is public and the current app does not validate `X-Twilio-Signature`, so only point trusted Twilio senders at it or add signature validation before using it in a higher-risk environment. Share pages and generated image routes are public by design.
+A: Admin pages use Google OAuth or the shared admin PIN, relay APIs require `x-relay-key`, and Twilio inbound/status webhooks validate `X-Twilio-Signature`. Share pages and approved generated image routes are public by design. Kiosk source images are private; finished portraits appear in the public photo book after generation and review.
 
 **Q: Are user phone numbers and photos stored permanently?**
-A: Original and generated photos in `downloads/<eventName>/` and related attendee records persist until the operator deletes them; V1 has no automatic retention limit or end-of-event deletion. The participation terms promise limited original-photo retention and deletion following the event, so staff need a cleanup process before live use. `/home/settings` > **Reset & data** > **Clear event data** is a manual action that deletes event jobs, generated images, leads, contacts, and kiosk submissions; settings and audit history remain.
+A: Kiosk originals are kept privately only through generation/review and removed when the finished portrait is published. Finished kiosk portraits, other channel images, and related attendee records persist until the operator deletes them; V1 has no automatic retention limit or end-of-event deletion. Staff need an end-of-event cleanup process. `/home/settings` > **Reset & data** > **Clear event data** manually deletes event jobs, generated images, leads, contacts, and kiosk submissions; settings and audit history remain.
+
+**Q: Can a kiosk portrait also print?**
+A: Yes. If the event uses Print + Digital, the kiosk job follows the same `ready/` → local printer or Print Relay → `done/` path. The selected digital method sends as soon as the portrait is approved, without waiting for the print.
 
 **Q: Can I run two events at once on the same deployment?**
 A: Only one "active" event at a time. The event name in settings determines where incoming MMS gets routed. If you need two simultaneous events, the clean answer is two separate deployments with different Twilio numbers.

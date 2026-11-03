@@ -169,6 +169,7 @@ test("a one-style batch still labels its portraits", () => {
     assert.match(book.children[0].innerHTML, /class="style-tag [^"]*">Cartoon<\/div>/);
     assert.match(book.children[1].innerHTML, /class="style-tag [^"]*">Cartoon<\/div>/);
     assert.doesNotMatch(book.children[2].innerHTML, /class="style-tag /);
+    assert.ok(book.children.every((page) => !page.innerHTML.includes('class="flip-btn"')));
 });
 
 test("gallery footer labels and preview controls are localized for Portuguese visitors", () => {

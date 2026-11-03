@@ -94,3 +94,64 @@ test("review card actions remain valid for quoted event names and IDs", () => {
         for (const handler of handlers) assert.doesNotThrow(() => new vm.Script(handler));
     }
 });
+
+test("review cards only offer kiosk retry and re-analysis when their private inputs remain available", () => {
+    const html = buildReviewQueueHtml();
+    const clientScript = [...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)].at(-1)[1];
+    const context = vm.createContext({
+        window: { location: { search: "" } },
+        document: { body: { addEventListener() {} } },
+        URLSearchParams,
+    });
+    new vm.Script(clientScript.split("// Poll every 5s")[0]).runInContext(context);
+
+    function render(variants, canReanalyze) {
+        context.job = {
+            parentJobId: "kiosk-group", eventName: "Kiosk Event", style: "Cartoon",
+            reviewAt: 1000, variantCount: variants.length, regenerationLimit: 2,
+            variants,
+        };
+        if (canReanalyze !== undefined) context.job.canReanalyze = canReanalyze;
+        return vm.runInContext("renderMultiCard(job)", context);
+    }
+
+    function variantButton(card, variantId) {
+        const marker = 'data-variant-id="' + variantId + '"';
+        const start = card.indexOf(marker);
+        assert.notEqual(start, -1, "missing variant " + variantId);
+        const match = card.slice(start).match(/<button class="rv-v-regen"([^>]*)>([^<]*)/);
+        assert.ok(match, "missing retry action for " + variantId);
+        return { attributes: match[1], label: match[2] };
+    }
+
+    const permanent = { variantId: "permanent", filePrefix: "permanent", status: "FAILED", canRegenerate: false };
+    const transient = { variantId: "transient", filePrefix: "transient", status: "FAILED", canRegenerate: true };
+    const mixedCard = render([permanent, transient], true);
+    const unavailableRetry = variantButton(mixedCard, "permanent");
+    assert.match(unavailableRetry.attributes, /\bdisabled\b/);
+    assert.doesNotMatch(unavailableRetry.attributes, /\bonclick=/);
+    assert.match(unavailableRetry.label, /Retry unavailable/);
+    const transientRetry = variantButton(mixedCard, "transient");
+    assert.match(transientRetry.attributes, /\bonclick="regenVariant\(/);
+    assert.doesNotMatch(transientRetry.attributes, /\bdisabled\b/);
+    assert.match(mixedCard, /class="rv-btn rv-btn-reanalyze" onclick="showFeedback\(/);
+
+    const exhaustedCard = render([
+        { variantId: "exhausted", filePrefix: "exhausted", status: "FAILED", regenCount: 2, canRegenerate: true },
+    ], true);
+    const exhaustedRetry = variantButton(exhaustedCard, "exhausted");
+    assert.match(exhaustedRetry.attributes, /\bdisabled\b/);
+    assert.match(exhaustedRetry.attributes, /Regeneration limit reached/);
+    assert.match(exhaustedCard, /class="rv-btn rv-btn-reanalyze" onclick="showFeedback\(/);
+
+    const noSourceCard = render([permanent], false);
+    assert.match(noSourceCard, /class="rv-btn rv-btn-reanalyze" disabled/);
+    assert.match(noSourceCard, /class="rv-btn rv-fb-submit" disabled/);
+    assert.match(noSourceCard, /Re-analysis unavailable: original photo or required references are no longer available/);
+    assert.doesNotMatch(noSourceCard, /class="rv-btn rv-btn-reanalyze" onclick=/);
+
+    // Older queue responses omit capability flags. Their existing actions stay available.
+    const legacyCard = render([{ variantId: "legacy", filePrefix: "legacy", status: "FAILED" }]);
+    assert.match(variantButton(legacyCard, "legacy").attributes, /\bonclick="regenVariant\(/);
+    assert.match(legacyCard, /class="rv-btn rv-btn-reanalyze" onclick="showFeedback\(/);
+});
