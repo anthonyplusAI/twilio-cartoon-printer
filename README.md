@@ -1,43 +1,77 @@
-# Twilio + AI Photo Generator
+<img src="assets/icon-twilio-bug-red.svg" alt="Twilio" width="46">
 
-[![CI](https://github.com/anthonyjdella/twilio-cartoon-printer/actions/workflows/ci.yml/badge.svg)](https://github.com/anthonyjdella/twilio-cartoon-printer/actions/workflows/ci.yml)
-[![Deploy](https://github.com/anthonyjdella/twilio-cartoon-printer/actions/workflows/deploy.yml/badge.svg)](https://github.com/anthonyjdella/twilio-cartoon-printer/actions/workflows/deploy.yml)
-[![Relay App Release](https://github.com/anthonyjdella/twilio-cartoon-printer/actions/workflows/relay-release.yml/badge.svg)](https://github.com/anthonyjdella/twilio-cartoon-printer/actions/workflows/relay-release.yml)
+# Twilio Cartoon Printer
+
+**Text a selfie. Pick a look. Share or print the result.** Twilio Cartoon Printer turns an SMS/MMS or WhatsApp conversation into an event photo booth. Guests can also start from a booth QR or kiosk. Operators shape the creative options, review portraits, and manage digital delivery, displays, and optional printing from one web app.
+
+[See the transformations](#from-photo-to-portrait) · [Follow the guest journey](#the-guest-journey) · [Set up an event](#installation)
+
+[![CI](https://github.com/anthonyplusAI/twilio-cartoon-printer/actions/workflows/ci.yml/badge.svg)](https://github.com/anthonyplusAI/twilio-cartoon-printer/actions/workflows/ci.yml)
+[![Deploy](https://github.com/anthonyplusAI/twilio-cartoon-printer/actions/workflows/deploy.yml/badge.svg)](https://github.com/anthonyplusAI/twilio-cartoon-printer/actions/workflows/deploy.yml)
+[![Relay App Release](https://github.com/anthonyplusAI/twilio-cartoon-printer/actions/workflows/relay-release.yml/badge.svg)](https://github.com/anthonyplusAI/twilio-cartoon-printer/actions/workflows/relay-release.yml)
 [![License: ISC](https://img.shields.io/badge/License-ISC-blue.svg)](#license)
 
-A photobooth-style app powered by Twilio and OpenAI. Attendees send a selfie by SMS/MMS or WhatsApp, choose an art style, and receive a digital portrait, share link, or optional print. Operators manage the entire event at runtime through the authenticated web UI -- no server restarts needed.
+## From photo to portrait
 
-## See It in Action
-
-<table>
-  <tr>
-    <td width="33%" align="center"><img src="docs/images/readme/cartoon.jpg" alt="Cartoon-style generated portrait" width="100%"><br><sub><strong>Cartoon</strong></sub></td>
-    <td width="33%" align="center"><img src="docs/images/readme/manga.jpg" alt="Manga-style generated portrait" width="100%"><br><sub><strong>Manga</strong></sub></td>
-    <td width="33%" align="center"><img src="docs/images/readme/watercolor.jpg" alt="Watercolor generated portrait" width="100%"><br><sub><strong>Watercolor</strong></sub></td>
-  </tr>
-  <tr>
-    <td width="33%" align="center"><img src="docs/images/readme/pixel-art.jpg" alt="Pixel-art generated portrait" width="100%"><br><sub><strong>Pixel Art</strong></sub></td>
-    <td width="33%" align="center"><img src="docs/images/readme/pop-art.jpg" alt="Pop-art generated portrait" width="100%"><br><sub><strong>Pop Art</strong></sub></td>
-    <td width="33%" align="center"><img src="docs/images/readme/pencil-sketch.jpg" alt="Pencil-sketch generated portrait" width="100%"><br><sub><strong>Pencil Sketch</strong></sub></td>
-  </tr>
-</table>
-
-### Before and After
+Four photos, four very different results. Each source image sits beside the creative portrait it inspired.
 
 <table>
   <tr>
-    <th width="50%">Selfie in</th>
-    <th width="50%">Event-ready portrait out</th>
+    <th width="50%">Photo in</th>
+    <th width="50%">Portrait out</th>
   </tr>
   <tr>
-    <td align="center"><img src="docs/images/readme/before-selfie.jpg" alt="Original selfie before processing" width="360"></td>
-    <td align="center"><img src="docs/images/readme/after-cartoon.jpg" alt="Manga portrait generated from the selfie" width="360"></td>
+    <td align="center" valign="middle"><img src="docs/images/readme/geometric-input.webp" alt="Older man in sunglasses holding flowers against a turquoise wall" width="100%"><br><sub>Source photo</sub></td>
+    <td align="center" valign="middle"><img src="docs/images/readme/geometric-output.webp" alt="The same man reimagined as a colorful geometric portrait" width="100%"><br><sub><strong>Geometric illustration</strong></sub></td>
+  </tr>
+  <tr>
+    <td align="center" valign="middle"><img src="docs/images/readme/bronze-input.webp" alt="Portrait of a woman with dark hair against a neutral background" width="100%"><br><sub>Source photo</sub></td>
+    <td align="center" valign="middle"><img src="docs/images/readme/bronze-output.webp" alt="The same woman rendered as a bronze sculpture" width="100%"><br><sub><strong>Bronze sculpture</strong></sub></td>
+  </tr>
+  <tr>
+    <td align="center" valign="middle"><img src="docs/images/readme/collectible-input.webp" alt="Portrait of a red-haired woman against a red backdrop" width="100%"><br><sub>Source photo</sub></td>
+    <td align="center" valign="middle"><img src="docs/images/readme/collectible-output.webp" alt="The same woman reimagined as a collectible figure in display packaging" width="100%"><br><sub><strong>Collectible figure</strong></sub></td>
+  </tr>
+  <tr>
+    <td align="center" valign="middle"><img src="docs/images/readme/painterly-input.webp" alt="Black-and-white portrait of a person reaching a hand toward the camera" width="100%"><br><sub>Source photo</sub></td>
+    <td align="center" valign="middle"><img src="docs/images/readme/painterly-output.webp" alt="The same person rendered as a textured painting in a city square" width="100%"><br><sub><strong>Painterly portrait</strong></sub></td>
   </tr>
 </table>
+
+### More creative directions
+
+Three more finished portraits show how much the look can change.
+
+<table>
+  <tr>
+    <td width="33%" align="center"><img src="docs/images/readme/anime-output.webp" alt="Anime-inspired portrait of an attendee at an event" width="100%"><br><sub><strong>Anime-inspired</strong></sub></td>
+    <td width="33%" align="center"><img src="docs/images/readme/pixel-output.webp" alt="Pixel-art portrait of a person with a dog" width="100%"><br><sub><strong>Pixel-art look</strong></sub></td>
+    <td width="33%" align="center"><img src="docs/images/readme/editorial-output.webp" alt="Warmly lit editorial portrait of a smiling woman" width="100%"><br><sub><strong>Warm editorial</strong></sub></td>
+  </tr>
+</table>
+
+*Showcase examples of creative treatments. Results vary with the source photo and event settings; the final three are shown without source photos.*
+
+## The guest journey
+
+A booth QR opens a messaging draft, or a guest can text the event number directly. The guest sends a selfie, chooses a look, and receives the finished portrait digitally or at an optional print station.
+
+![Illustrated guest journey from SMS or WhatsApp selfie to style choice, AI portrait, and digital or optional print delivery](assets/readme-journey.svg)
+
+## Built for live events
+
+| For guests | For event teams |
+| --- | --- |
+| **Start in a familiar chat.** Send a selfie through SMS/MMS or WhatsApp, or use the booth kiosk. | **Make it yours.** Configure styles, brand wardrobes, backgrounds, and frames without restarting the app. |
+| **Choose a look.** Pick from active styles, or name one in the photo caption. | **Keep quality in view.** Choose automatic delivery or hold portraits for human or AI review. |
+| **Keep the moment.** Receive a digital image or share link, with printing when the event enables it. | **Run the room.** Monitor jobs, coordinate printers, and show approved portraits on booth displays. |
+
+For events that enable [Voice portraits](#optional-voice-portraits), guests can describe a look by phone, confirm it, and receive the result in their original message conversation.
 
 ## How It Works
 
 ```mermaid
+%%{init: {'theme':'base','themeVariables':{'primaryColor':'#EF223A','primaryTextColor':'#FFFFFF','primaryBorderColor':'#000D25','lineColor':'#000D25','fontFamily':'Arial, sans-serif'}}}%%
 flowchart TB
   U["User sends selfie via SMS/MMS or WhatsApp"] --> T["Twilio webhook receives the message"]
   T --> Q["Job queued to disk (survives restarts)"]
@@ -95,7 +129,7 @@ See [Installation](#installation), [Usage](#usage), and [Cloud Deployment](#clou
 ### 1. Clone and install
 
 ```sh
-git clone <your-repo-url>
+git clone https://github.com/anthonyplusAI/twilio-cartoon-printer.git
 cd twilio-cartoon-printer
 pnpm install
 ```
@@ -314,7 +348,7 @@ For developers or automated setups, the CLI relay runs in the terminal:
 
 ```sh
 # Clone the repo (or copy just the scripts/ folder)
-git clone <your-repo-url>
+git clone https://github.com/anthonyplusAI/twilio-cartoon-printer.git
 cd twilio-cartoon-printer
 pnpm install
 ```

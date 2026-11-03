@@ -344,7 +344,12 @@ test("cutting into a clarification does not invalidate a completed readback", as
 
 test("caller can change language during the call and stale model work is discarded after a cut-in", async (t) => {
     let resolveModel;
-    const f = await fixture({ respond: () => new Promise((resolve) => { resolveModel = resolve; }) });
+    let signalModelStarted;
+    const modelStarted = new Promise((resolve) => { signalModelStarted = resolve; });
+    const f = await fixture({ respond: () => new Promise((resolve) => {
+        resolveModel = resolve;
+        signalModelStarted();
+    }) });
     t.after(f.close);
     const fields = { From: PHONE, To: VOICE, CallSid: "CA1", AccountSid: ACCOUNT };
     await f.post("/voice/inbound", fields);
@@ -352,7 +357,7 @@ test("caller can change language during the call and stale model work is discard
     await new Promise((resolve) => c.ws.once("open", resolve));
     c.send(setup(f.request.id));
     c.send({ type: "prompt", voicePrompt: "Make it a watercolor", last: true });
-    await new Promise((resolve) => setTimeout(resolve, 10));
+    await modelStarted;
     c.send({ type: "interrupt", utteranceUntilInterrupt: "" });
     resolveModel({ speech: "Done", readyToConfirm: true, brief: BRIEF });
     c.send({ type: "prompt", voicePrompt: "Português", last: true });
