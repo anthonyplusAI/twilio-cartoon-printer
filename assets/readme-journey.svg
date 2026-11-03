@@ -1,0 +1,123 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 600" role="img" aria-labelledby="journey-title journey-description">
+  <title id="journey-title">Twilio Cartoon Printer event journey</title>
+  <desc id="journey-description">An attendee sends a selfie by SMS or WhatsApp, chooses an art style, receives an AI portrait, and can save, share, or optionally print it. Event teams control the look, review, displays, and event activity.</desc>
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#000D25"/>
+      <stop offset="1" stop-color="#081F47"/>
+    </linearGradient>
+    <linearGradient id="art" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#EF223A"/>
+      <stop offset="1" stop-color="#0E3E92"/>
+    </linearGradient>
+    <clipPath id="portrait-window">
+      <rect x="835" y="189" width="120" height="135" rx="15"/>
+    </clipPath>
+    <marker id="next" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+      <path d="M2 2L8 5L2 8" fill="none" stroke="#EF223A" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+  </defs>
+
+  <rect width="1440" height="600" rx="28" fill="url(#background)"/>
+  <svg x="42" y="37" width="48" height="48" viewBox="0 0 46 46" aria-hidden="true">
+    <path d="M17.25 33.1731C19.6928 33.1731 21.673 31.1928 21.673 28.75C21.673 26.3072 19.6928 24.327 17.25 24.327C14.8072 24.327 12.8269 26.3072 12.8269 28.75C12.8269 31.1928 14.8072 33.1731 17.25 33.1731ZM17.25 21.6731C19.6928 21.6731 21.673 19.6928 21.673 17.25C21.673 14.8072 19.6928 12.8269 17.25 12.8269C14.8072 12.8269 12.8269 14.8072 12.8269 17.25C12.8269 19.6928 14.8072 21.6731 17.25 21.6731ZM28.75 33.1731C31.1928 33.1731 33.1731 31.1928 33.1731 28.75C33.1731 26.3072 31.1928 24.327 28.75 24.327C26.3072 24.327 24.3269 26.3072 24.3269 28.75C24.3269 31.1928 26.3072 33.1731 28.75 33.1731ZM28.75 21.6731C31.1928 21.6731 33.1731 19.6928 33.1731 17.25C33.1731 14.8072 31.1928 12.8269 28.75 12.8269C26.3072 12.8269 24.3269 14.8072 24.3269 17.25C24.3269 19.6928 26.3072 21.6731 28.75 21.6731ZM23 0C35.4583 0 46 10.5417 46 23C46 35.4583 35.4583 46 23 46C10.5417 46 0 35.4583 0 23C0 10.5418 10.5417 0 23 0ZM23 6.19231C13.7438 6.19231 6.19231 13.4824 6.19231 22.6912C6.19231 31.9001 13.7438 39.8077 23 39.8077C32.2561 39.8077 39.8077 31.9001 39.8077 22.6912C39.8077 13.4823 32.2561 6.19231 23 6.19231Z" fill="#EF223A"/>
+  </svg>
+  <text x="111" y="69" fill="#FFFFFF" font-family="Arial, Helvetica, sans-serif" font-size="36" font-weight="700">From selfie to keepsake</text>
+  <text x="111" y="98" fill="#DDE0E6" font-family="Arial, Helvetica, sans-serif" font-size="18">One conversation carries the experience from first photo to final portrait.</text>
+  <path d="M42 119H1398" stroke="#38425E" stroke-width="2"/>
+
+  <!-- A photo starts the journey in a messaging conversation. -->
+  <rect x="42" y="143" width="300" height="290" rx="24" fill="#0B1B35" stroke="#38425E" stroke-width="2"/>
+  <circle cx="79" cy="178" r="19" fill="#EF223A"/>
+  <text x="79" y="185" text-anchor="middle" fill="#FFFFFF" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="700">1</text>
+  <rect x="140" y="181" width="104" height="148" rx="19" fill="#F3F4F7"/>
+  <rect x="149" y="190" width="86" height="119" rx="11" fill="#E4F7FF"/>
+  <rect x="157" y="205" width="70" height="72" rx="7" fill="#BADFEB"/>
+  <circle cx="192" cy="230" r="13" fill="#C78366"/>
+  <path d="M179 229c-1-14 6-23 17-23 11 0 15 8 13 21-7-5-17-7-30 2z" fill="#000D25"/>
+  <path d="M165 277c2-21 10-31 27-31s25 10 27 31" fill="#0E3E92"/>
+  <rect x="166" y="284" width="61" height="20" rx="10" fill="#EF223A"/>
+  <text x="196" y="298" text-anchor="middle" fill="#FFFFFF" font-family="Arial, Helvetica, sans-serif" font-size="11" font-weight="700">Photo sent</text>
+  <rect x="179" y="316" width="26" height="4" rx="2" fill="#BABECC"/>
+  <text x="62" y="372" fill="#FFFFFF" font-family="Arial, Helvetica, sans-serif" font-size="25" font-weight="700">Send a selfie</text>
+  <text x="62" y="402" fill="#DDE0E6" font-family="Arial, Helvetica, sans-serif" font-size="18">SMS/MMS or WhatsApp</text>
+
+  <path d="M351 286H381" stroke="#EF223A" stroke-width="3.5" stroke-linecap="round" marker-end="url(#next)"/>
+
+  <!-- The event's style menu provides the creative direction. -->
+  <rect x="394" y="143" width="300" height="290" rx="24" fill="#0B1B35" stroke="#38425E" stroke-width="2"/>
+  <circle cx="431" cy="178" r="19" fill="#EF223A"/>
+  <text x="431" y="185" text-anchor="middle" fill="#FFFFFF" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="700">2</text>
+  <g transform="rotate(-9 504 261)">
+    <rect x="451" y="207" width="91" height="110" rx="11" fill="#A5EBFF" stroke="#F3F4F7" stroke-width="4"/>
+    <path d="M451 292L495 239L542 280V317H451Z" fill="#0E3E92"/>
+    <circle cx="484" cy="239" r="17" fill="#FFFFFF"/>
+  </g>
+  <g transform="rotate(8 589 261)">
+    <rect x="545" y="207" width="91" height="110" rx="11" fill="#FD7685" stroke="#F3F4F7" stroke-width="4"/>
+    <path d="M549 298L584 245L633 279V313H549Z" fill="#B10F23"/>
+    <path d="M554 240L581 216L604 238L574 264Z" fill="#FFE2BA"/>
+  </g>
+  <rect x="501" y="196" width="91" height="124" rx="11" fill="#F3F4F7" stroke="#FFFFFF" stroke-width="4"/>
+  <rect x="510" y="205" width="73" height="92" rx="6" fill="#0B2A60"/>
+  <circle cx="547" cy="237" r="16" fill="#E7A97F"/>
+  <path d="M531 238c-2-16 6-25 17-25s17 8 15 24c-10-6-20-7-32 1z" fill="#000D25"/>
+  <path d="M513 296c2-24 11-35 34-35s31 11 34 35" fill="#EF223A"/>
+  <rect x="522" y="304" width="49" height="7" rx="3.5" fill="#BABECC"/>
+  <text x="414" y="372" fill="#FFFFFF" font-family="Arial, Helvetica, sans-serif" font-size="25" font-weight="700">Choose a look</text>
+  <text x="414" y="402" fill="#DDE0E6" font-family="Arial, Helvetica, sans-serif" font-size="18">Styles shaped for the event</text>
+
+  <path d="M703 286H733" stroke="#EF223A" stroke-width="3.5" stroke-linecap="round" marker-end="url(#next)"/>
+
+  <!-- A colorful portrait makes the transformation visible. -->
+  <rect x="746" y="143" width="300" height="290" rx="24" fill="#0B1B35" stroke="#EF223A" stroke-width="2"/>
+  <circle cx="783" cy="178" r="19" fill="#EF223A"/>
+  <text x="783" y="185" text-anchor="middle" fill="#FFFFFF" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="700">3</text>
+  <rect x="827" y="181" width="136" height="151" rx="20" fill="#F3F4F7"/>
+  <g clip-path="url(#portrait-window)">
+    <rect x="835" y="189" width="120" height="135" fill="url(#art)"/>
+    <path d="M825 281L872 223L964 299V330H825Z" fill="#3ACEFA" opacity=".56"/>
+    <circle cx="924" cy="210" r="29" fill="#FD7685" opacity=".7"/>
+    <path d="M843 334c3-42 17-61 51-61s49 19 53 61" fill="#000D25"/>
+    <path d="M871 280L894 304L917 280" fill="#EF223A"/>
+    <rect x="885" y="263" width="18" height="25" rx="7" fill="#E7A97F"/>
+    <ellipse cx="894" cy="235" rx="29" ry="35" fill="#E7A97F"/>
+    <path d="M865 234c0-27 12-43 31-43s29 14 28 42c-14-8-31-11-59 1z" fill="#000D25"/>
+    <path d="M877 240h10m17 0h9" stroke="#000D25" stroke-width="2.4" stroke-linecap="round"/>
+    <path d="M886 257c5 4 11 4 16 0" fill="none" stroke="#9A4D4D" stroke-width="2.5" stroke-linecap="round"/>
+    <path d="M835 296L871 275L857 323H835Z" fill="#FFE2BA" opacity=".75"/>
+  </g>
+  <text x="766" y="372" fill="#FFFFFF" font-family="Arial, Helvetica, sans-serif" font-size="25" font-weight="700">Make it art</text>
+  <text x="766" y="402" fill="#DDE0E6" font-family="Arial, Helvetica, sans-serif" font-size="18">AI creates the portrait</text>
+
+  <path d="M1055 286H1085" stroke="#EF223A" stroke-width="3.5" stroke-linecap="round" marker-end="url(#next)"/>
+
+  <!-- Digital sharing is available, with physical printing as a choice. -->
+  <rect x="1098" y="143" width="300" height="290" rx="24" fill="#0B1B35" stroke="#38425E" stroke-width="2"/>
+  <circle cx="1135" cy="178" r="19" fill="#EF223A"/>
+  <text x="1135" y="185" text-anchor="middle" fill="#FFFFFF" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="700">4</text>
+  <rect x="1136" y="207" width="101" height="111" rx="15" fill="#F3F4F7"/>
+  <path d="M1162 253l13-13c6-6 16-6 22 0m-24 24c6 6 16 6 22 0l13-13" fill="none" stroke="#0B2A60" stroke-width="7" stroke-linecap="round"/>
+  <path d="M1170 251l25-1" stroke="#EF223A" stroke-width="6" stroke-linecap="round"/>
+  <text x="1186" y="301" text-anchor="middle" fill="#000D25" font-family="Arial, Helvetica, sans-serif" font-size="14" font-weight="700">Share link</text>
+  <rect x="1258" y="207" width="101" height="111" rx="15" fill="#E4F7FF"/>
+  <rect x="1278" y="231" width="61" height="43" rx="7" fill="#0B2A60"/>
+  <rect x="1287" y="218" width="43" height="17" rx="3" fill="#FFFFFF"/>
+  <path d="M1290 259h38m-33 7h28" stroke="#A5EBFF" stroke-width="3" stroke-linecap="round"/>
+  <rect x="1288" y="272" width="41" height="11" fill="#FFFFFF"/>
+  <text x="1309" y="301" text-anchor="middle" fill="#000D25" font-family="Arial, Helvetica, sans-serif" font-size="14" font-weight="700">Print</text>
+  <text x="1118" y="372" fill="#FFFFFF" font-family="Arial, Helvetica, sans-serif" font-size="25" font-weight="700">Save, share, print</text>
+  <text x="1118" y="402" fill="#DDE0E6" font-family="Arial, Helvetica, sans-serif" font-size="18">Digital first, print optional</text>
+
+  <rect x="42" y="462" width="1356" height="96" rx="19" fill="#0B2A60" stroke="#1953B9" stroke-width="2"/>
+  <text x="70" y="520" fill="#FFFFFF" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="700">Event teams</text>
+  <path d="M238 486V535" stroke="#3ACEFA" stroke-width="2" opacity=".7"/>
+  <circle cx="279" cy="512" r="6" fill="#EF223A"/>
+  <text x="297" y="520" fill="#FFFFFF" font-family="Arial, Helvetica, sans-serif" font-size="20">Set the look</text>
+  <circle cx="535" cy="512" r="6" fill="#EF223A"/>
+  <text x="553" y="520" fill="#FFFFFF" font-family="Arial, Helvetica, sans-serif" font-size="20">Review portraits</text>
+  <circle cx="847" cy="512" r="6" fill="#EF223A"/>
+  <text x="865" y="520" fill="#FFFFFF" font-family="Arial, Helvetica, sans-serif" font-size="20">Run displays</text>
+  <circle cx="1109" cy="512" r="6" fill="#EF223A"/>
+  <text x="1127" y="520" fill="#FFFFFF" font-family="Arial, Helvetica, sans-serif" font-size="20">Track activity</text>
+</svg>
