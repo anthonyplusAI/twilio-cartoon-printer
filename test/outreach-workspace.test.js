@@ -147,6 +147,7 @@ function syntheticOutreach({ holdFirstDoneRead = false, holdSecondReadFile = fal
     let accessCount = 0;
     let sentMessages = 0;
     let nudgedContacts = 0;
+    const invalidatedJobs = [];
     let randomBound = 0;
     let now = 1_000_000;
     class SyntheticDate extends Date { static now() { return now; } }
@@ -219,6 +220,7 @@ function syntheticOutreach({ holdFirstDoneRead = false, holdSecondReadFile = fal
                 kioskVariantWinner && event === "Event A" && prefix === "portrait_0-v1"
                     ? "portrait_0-v2" : prefix,
         },
+        "./delivery-scan-cache": { invalidate: (jobPath) => invalidatedJobs.push(jobPath) },
         "./auth": { userBarSnippet: () => "", magicHatSnippet: () => "" },
         "./outreach-page": { paginateRows, buildOutreachHtml: () => "<html></html>" },
         "node:crypto": { randomInt: (bound) => { randomBound = bound; return bound - 1; } },
@@ -256,6 +258,7 @@ function syntheticOutreach({ holdFirstDoneRead = false, holdSecondReadFile = fal
         get accessCount() { return accessCount; }, get randomBound() { return randomBound; },
         get sentMessages() { return sentMessages; }, get nudgedContacts() { return nudgedContacts; },
         get imageFiles() { return [...imageFiles]; },
+        get invalidatedJobs() { return invalidatedJobs; },
     };
 }
 
@@ -322,6 +325,7 @@ test("deleting a kiosk user removes the legacy raw upload without touching a nei
     assert.equal(deleted.status, 200);
     assert.equal(deleted.payload.deletedImages, 3);
     assert.deepEqual(app.imageFiles, ["portrait_01_output.png"]);
+    assert.deepEqual(app.invalidatedJobs, ["/synthetic/done/0.json"]);
 });
 
 test("a refresh started before deletion cannot restore a deleted recipient", async () => {
