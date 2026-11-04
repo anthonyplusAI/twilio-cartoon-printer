@@ -51,6 +51,7 @@ jobs:
         env:
           SENDGRID_API_KEY: ${{ secrets.SENDGRID_API_KEY }}
           SENDGRID_FROM_EMAIL: ${{ vars.SENDGRID_FROM_EMAIL }}
+          SENDGRID_REPLY_TO_EMAIL: ${{ vars.SENDGRID_REPLY_TO_EMAIL }}
         run: |
           if [[ -n "$SENDGRID_API_KEY" && -z "$SENDGRID_FROM_EMAIL" ]] ||
              [[ -z "$SENDGRID_API_KEY" && -n "$SENDGRID_FROM_EMAIL" ]]; then
@@ -59,6 +60,10 @@ jobs:
           fi
           if [[ -n "$SENDGRID_FROM_EMAIL" && ! "$SENDGRID_FROM_EMAIL" =~ ^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$ ]]; then
             echo "::error::SENDGRID_FROM_EMAIL must be a valid email address."
+            exit 1
+          fi
+          if [[ -n "$SENDGRID_REPLY_TO_EMAIL" && ! "$SENDGRID_REPLY_TO_EMAIL" =~ ^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$ ]]; then
+            echo "::error::SENDGRID_REPLY_TO_EMAIL must be a valid email address."
             exit 1
           fi
 
@@ -207,6 +212,7 @@ jobs:
         env:
           SENDGRID_API_KEY: ${{ secrets.SENDGRID_API_KEY }}
           SENDGRID_FROM_EMAIL: ${{ vars.SENDGRID_FROM_EMAIL }}
+          SENDGRID_REPLY_TO_EMAIL: ${{ vars.SENDGRID_REPLY_TO_EMAIL }}
           SENDGRID_FROM_NAME: ${{ vars.SENDGRID_FROM_NAME }}
           SENDGRID_EVENT_WEBHOOK_PUBLIC_KEY: ${{ vars.SENDGRID_EVENT_WEBHOOK_PUBLIC_KEY }}
           SENDGRID_REGION: ${{ vars.SENDGRID_REGION }}
@@ -230,6 +236,7 @@ jobs:
           # Keep SendGrid optional. The key is passed through the step environment,
           # never interpolated into the workflow script or the rendered app YAML.
           sendgrid_configured=false
+          sendgrid_reply_to_configured=false
           sendgrid_from_name_configured=false
           sendgrid_event_key_configured=false
           sendgrid_region_configured=false
@@ -238,6 +245,10 @@ jobs:
               "sendgrid-key=$SENDGRID_API_KEY"
               "sendgrid-from-email=$SENDGRID_FROM_EMAIL"
             )
+            if [[ -n "$SENDGRID_REPLY_TO_EMAIL" ]]; then
+              sendgrid_secrets+=("sendgrid-reply-to-email=$SENDGRID_REPLY_TO_EMAIL")
+              sendgrid_reply_to_configured=true
+            fi
             if [[ -n "$SENDGRID_FROM_NAME" ]]; then
               sendgrid_secrets+=("sendgrid-from-name=$SENDGRID_FROM_NAME")
               sendgrid_from_name_configured=true
@@ -259,6 +270,7 @@ jobs:
           fi
           {
             echo "SENDGRID_CONFIGURED=$sendgrid_configured"
+            echo "SENDGRID_REPLY_TO_CONFIGURED=$sendgrid_reply_to_configured"
             echo "SENDGRID_FROM_NAME_CONFIGURED=$sendgrid_from_name_configured"
             echo "SENDGRID_EVENT_KEY_CONFIGURED=$sendgrid_event_key_configured"
             echo "SENDGRID_REGION_CONFIGURED=$sendgrid_region_configured"
@@ -270,6 +282,7 @@ jobs:
         # Empty = domain-only (renders as ALLOWED_EMAILS="").
         env:
           ALLOWED_EMAILS: ${{ vars.ALLOWED_EMAILS }}
+          KIOSK_EMAIL_PAUSED: ${{ vars.KIOSK_EMAIL_PAUSED }}
           TWILIO_WHATSAPP_NUMBER: ${{ vars.TWILIO_WHATSAPP_NUMBER }}
           TWILIO_WHATSAPP_MESSAGING_SERVICE_SID: ${{ vars.TWILIO_WHATSAPP_MESSAGING_SERVICE_SID }}
           TWILIO_TEMPLATE_DELIVERY: ${{ vars.TWILIO_TEMPLATE_DELIVERY }}
@@ -297,6 +310,12 @@ jobs:
           export BASE_URL="https://${FQDN}"
           export DEPLOYMENT_RUN_ID="${{ github.run_id }}"
           export ALLOWED_EMAILS="${ALLOWED_EMAILS:-}"
+          if [[ -n "$KIOSK_EMAIL_PAUSED" && "$KIOSK_EMAIL_PAUSED" != "true" && "$KIOSK_EMAIL_PAUSED" != "false" ]]; then
+            echo "::error::KIOSK_EMAIL_PAUSED must be true or false."
+            exit 1
+          fi
+          # Pause kiosk email unless the deployment explicitly opts in after sender authentication.
+          export KIOSK_EMAIL_PAUSED="${KIOSK_EMAIL_PAUSED:-true}"
           export TWILIO_WHATSAPP_NUMBER="${TWILIO_WHATSAPP_NUMBER:-}"
           export TWILIO_WHATSAPP_MESSAGING_SERVICE_SID="${TWILIO_WHATSAPP_MESSAGING_SERVICE_SID:-}"
           export TWILIO_TEMPLATE_DELIVERY="${TWILIO_TEMPLATE_DELIVERY:-}"
@@ -309,7 +328,7 @@ jobs:
           export TWILIO_TEMPLATE_NUDGE_PT_BR="${TWILIO_TEMPLATE_NUDGE_PT_BR:-}"
           # shellcheck disable=SC2016
           # Restrict substitution to our known vars so no other ${...} in the template is touched.
-          envsubst '${APP_NAME} ${CONTAINER_IMAGE} ${BASE_URL} ${DEPLOYMENT_RUN_ID} ${ALLOWED_EMAILS} ${TWILIO_WHATSAPP_NUMBER} ${TWILIO_WHATSAPP_MESSAGING_SERVICE_SID} ${TWILIO_TEMPLATE_DELIVERY} ${TWILIO_TEMPLATE_RATING} ${TWILIO_TEMPLATE_PROMO} ${TWILIO_TEMPLATE_NUDGE} ${TWILIO_TEMPLATE_DELIVERY_PT_BR} ${TWILIO_TEMPLATE_RATING_PT_BR} ${TWILIO_TEMPLATE_PROMO_PT_BR} ${TWILIO_TEMPLATE_NUDGE_PT_BR}' < .github/containerapp.yaml > /tmp/containerapp.yaml
+          envsubst '${APP_NAME} ${CONTAINER_IMAGE} ${BASE_URL} ${DEPLOYMENT_RUN_ID} ${ALLOWED_EMAILS} ${KIOSK_EMAIL_PAUSED} ${TWILIO_WHATSAPP_NUMBER} ${TWILIO_WHATSAPP_MESSAGING_SERVICE_SID} ${TWILIO_TEMPLATE_DELIVERY} ${TWILIO_TEMPLATE_RATING} ${TWILIO_TEMPLATE_PROMO} ${TWILIO_TEMPLATE_NUDGE} ${TWILIO_TEMPLATE_DELIVERY_PT_BR} ${TWILIO_TEMPLATE_RATING_PT_BR} ${TWILIO_TEMPLATE_PROMO_PT_BR} ${TWILIO_TEMPLATE_NUDGE_PT_BR}' < .github/containerapp.yaml > /tmp/containerapp.yaml
 
           # Explicit empty values disable email and clear optional settings when
           # their GitHub inputs are removed, even if Azure still holds old secrets.
@@ -328,6 +347,7 @@ jobs:
           bindings = (
               ("SENDGRID_API_KEY", "sendgrid-key", enabled),
               ("SENDGRID_FROM_EMAIL", "sendgrid-from-email", enabled),
+              ("SENDGRID_REPLY_TO_EMAIL", "sendgrid-reply-to-email", enabled and os.environ.get("SENDGRID_REPLY_TO_CONFIGURED") == "true"),
               ("SENDGRID_FROM_NAME", "sendgrid-from-name", enabled and os.environ.get("SENDGRID_FROM_NAME_CONFIGURED") == "true"),
               ("SENDGRID_EVENT_WEBHOOK_PUBLIC_KEY", "sendgrid-event-key", enabled and os.environ.get("SENDGRID_EVENT_KEY_CONFIGURED") == "true"),
               ("SENDGRID_REGION", "sendgrid-region", enabled and os.environ.get("SENDGRID_REGION_CONFIGURED") == "true"),

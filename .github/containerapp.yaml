@@ -27,6 +27,9 @@ properties:
           # Non-@twilio.com sign-in escape hatch (comma-separated). Empty = domain only.
           - name: ALLOWED_EMAILS
             value: "${ALLOWED_EMAILS}"
+          # Emergency pause for new kiosk email submissions and queued sends.
+          - name: KIOSK_EMAIL_PAUSED
+            value: "${KIOSK_EMAIL_PAUSED}"
           - name: TWILIO_ACCOUNT_SID
             secretRef: twilio-sid
           - name: TWILIO_AUTH_TOKEN

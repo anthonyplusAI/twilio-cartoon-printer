@@ -66,6 +66,19 @@ test("Portuguese kiosk renders localized controls and style labels", () => {
     assert.doesNotThrow(() => new vm.Script(script));
 });
 
+test("kiosk consent names public display of both the original photo and portrait", () => {
+    for (const [locale, notice, agreement] of [
+        ["en", /original photo.*finished portrait.*public photo book/i,
+            /public display.*original photo.*finished portrait/i],
+        ["pt_BR", /foto original.*retrato final.*álbum público/i,
+            /exibição pública.*foto original.*retrato final/i],
+    ]) {
+        const html = buildKioskHtml({ styleOptions: [], eventName: "Event", locale, languageMode: locale });
+        assert.match(html, notice);
+        assert.match(html, agreement);
+    }
+});
+
 test("Portuguese photo book localizes public controls", () => {
     const html = buildPageHtml("Evento", "pt_BR");
     assert.match(html, /Álbum de fotos/);

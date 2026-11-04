@@ -522,6 +522,44 @@ for (const recoveryMethod of ["recoverStaleJobs", "sweepStaleGenerating"]) {
     });
 }
 
+test("an interrupted consented kiosk publication requeues with its source intact", async () => {
+    const fixture = isolatedQueue();
+    const { queue, dirs } = fixture;
+    const job = kioskVariant(`kiosk-partial-publish-${process.pid}`, 1, undefined, {
+        parentJobId: undefined, variantId: undefined, variantCount: undefined,
+        variantIndex: undefined, kioskOriginalPublic: true,
+        retries: 0, generatingAt: Date.now() - 6 * 60 * 1000,
+    });
+    const filename = `${job.filePrefix}.json`;
+    const staged = pipeline.jobPaths(job, { staged: true });
+    const published = pipeline.jobPaths(job);
+    const originalRename = fs.promises.rename;
+    try {
+        fs.writeFileSync(path.join(dirs.GENERATING_DIR, filename), JSON.stringify(job));
+        fs.writeFileSync(staged.inputPath, "consented selfie");
+        fs.writeFileSync(staged.mmsPath, "mms portrait");
+        fs.writeFileSync(staged.outputPath, "finished portrait");
+
+        fs.promises.rename = async (src, dst) => {
+            if (dst === published.outputPath) throw new Error("interrupted before output commit");
+            return originalRename(src, dst);
+        };
+        await assert.rejects(pipeline.moveStagedToFinal(job), /interrupted before output commit/);
+        fs.promises.rename = originalRename;
+
+        await queue.sweepStaleGenerating();
+        const requeued = path.join(dirs.PENDING_DIR, filename);
+        assert.equal(fs.existsSync(requeued), true, "the real queue recovery must requeue the job");
+        assert.equal(JSON.parse(fs.readFileSync(requeued, "utf8")).retries, 1);
+        assert.equal(fs.readFileSync(staged.inputPath, "utf8"), "consented selfie",
+            "the queued generation still needs the original input");
+        assert.equal(fs.existsSync(published.outputPath), false);
+    } finally {
+        fs.promises.rename = originalRename;
+        fixture.cleanup();
+    }
+});
+
 test("published-output recovery rebuilds a missing MMS derivative before delivery", async () => {
     const fixture = isolatedQueue();
     const { queue, dirs, downloads } = fixture;

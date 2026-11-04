@@ -11,6 +11,7 @@ const template = fs.readFileSync(path.join(root, ".github/containerapp.yaml"), "
 const names = [
     "SENDGRID_API_KEY",
     "SENDGRID_FROM_EMAIL",
+    "SENDGRID_REPLY_TO_EMAIL",
     "SENDGRID_FROM_NAME",
     "SENDGRID_EVENT_WEBHOOK_PUBLIC_KEY",
     "SENDGRID_REGION",
@@ -45,10 +46,20 @@ const deploy = runBlock("Deploy Container App");
 const renderer = deploy.match(/python3 - \/tmp\/containerapp\.yaml <<'PY'\n([\s\S]*?)\nPY(?:\n|$)/)?.[1];
 assert.ok(renderer, "Missing SendGrid YAML renderer");
 
-function validate(key, email) {
+function deployEmailPause(input) {
+    const start = deploy.indexOf('if [[ -n "$KIOSK_EMAIL_PAUSED"');
+    const end = deploy.indexOf('export TWILIO_WHATSAPP_NUMBER=', start);
+    assert.ok(start >= 0 && end > start, "Missing kiosk email pause setup");
+    const script = deploy.slice(start, end) + '\nprintf "PAUSE=%s\\n" "$KIOSK_EMAIL_PAUSED"\n';
+    return spawnSync("bash", ["-e", "-c", script], {
+        encoding: "utf8", env: { ...process.env, KIOSK_EMAIL_PAUSED: input },
+    });
+}
+
+function validate(key, email, replyTo = "") {
     return spawnSync("bash", ["-e", "-c", validation], {
         encoding: "utf8",
-        env: { ...process.env, SENDGRID_API_KEY: key, SENDGRID_FROM_EMAIL: email },
+        env: { ...process.env, SENDGRID_API_KEY: key, SENDGRID_FROM_EMAIL: email, SENDGRID_REPLY_TO_EMAIL: replyTo },
     });
 }
 
@@ -64,6 +75,7 @@ function syncSecrets(settings) {
                 ...process.env,
                 SENDGRID_API_KEY: settings.key || "",
                 SENDGRID_FROM_EMAIL: settings.email || "",
+                SENDGRID_REPLY_TO_EMAIL: settings.replyTo || "",
                 SENDGRID_FROM_NAME: settings.name || "",
                 SENDGRID_EVENT_WEBHOOK_PUBLIC_KEY: settings.publicKey || "",
                 SENDGRID_REGION: settings.region || "",
@@ -83,7 +95,7 @@ function syncSecrets(settings) {
 
 function parsedSendGridEnv(renderedPath) {
     // Parse the rendered YAML where Ruby is available. The fallback checks all
-    // five bindings when the test environment does not include a YAML parser.
+    // six bindings when the test environment does not include a YAML parser.
     const ruby = spawnSync("ruby", ["-ryaml", "-rjson", "-e",
         'puts JSON.generate(YAML.load_file(ARGV.fetch(0)).fetch("properties").fetch("template").fetch("containers").fetch(0).fetch("env"))',
         renderedPath], { encoding: "utf8" });
@@ -123,6 +135,7 @@ function render(flags) {
 test("SendGrid deployment requires a key and valid sender together", () => {
     assert.equal(validate("", "").status, 0);
     assert.equal(validate("SG.test-secret", "booth@example.com").status, 0);
+    assert.equal(validate("SG.test-secret", "booth@example.com", "staff@example.com").status, 0);
     for (const [key, email] of [
         ["SG.test-secret", ""],
         ["", "booth@example.com"],
@@ -132,20 +145,37 @@ test("SendGrid deployment requires a key and valid sender together", () => {
         assert.notEqual(result.status, 0);
         assert.match(result.stdout, /::error::/);
     }
+    const invalidReplyTo = validate("SG.test-secret", "booth@example.com", "not-an-email");
+    assert.notEqual(invalidReplyTo.status, 0);
+    assert.match(invalidReplyTo.stdout, /SENDGRID_REPLY_TO_EMAIL/);
+});
+
+test("Azure deployment pauses kiosk email by default and accepts only an explicit release", () => {
+    assert.match(workflow, /KIOSK_EMAIL_PAUSED: \$\{\{ vars\.KIOSK_EMAIL_PAUSED \}\}/);
+    assert.match(template, /- name: KIOSK_EMAIL_PAUSED\n\s+value: "\$\{KIOSK_EMAIL_PAUSED\}"/);
+    assert.match(deploy, /envsubst '[^']*\$\{KIOSK_EMAIL_PAUSED\}[^']*'/);
+    assert.match(deployEmailPause("").stdout, /PAUSE=true/);
+    assert.match(deployEmailPause("true").stdout, /PAUSE=true/);
+    assert.match(deployEmailPause("false").stdout, /PAUSE=false/);
+    const invalid = deployEmailPause("on");
+    assert.notEqual(invalid.status, 0);
+    assert.match(invalid.stdout, /KIOSK_EMAIL_PAUSED must be true or false/);
 });
 
 test("configured SendGrid settings render only Azure secret references", () => {
     const { flags, args } = syncSecrets({
         key: "SG.test-secret", email: "booth@example.com", name: "Photo Booth",
-        publicKey: "test-public-key", region: "eu",
+        replyTo: "staff@example.com", publicKey: "test-public-key", region: "eu",
     });
     assert.equal(flags.SENDGRID_CONFIGURED, "true");
     assert.ok(args.includes("sendgrid-key=SG.test-secret"));
     assert.ok(args.includes("sendgrid-from-email=booth@example.com"));
+    assert.ok(args.includes("sendgrid-reply-to-email=staff@example.com"));
     assert.ok(args.includes("sendgrid-event-key=test-public-key"));
     assert.deepEqual(render(flags), {
         SENDGRID_API_KEY: { secretRef: "sendgrid-key" },
         SENDGRID_FROM_EMAIL: { secretRef: "sendgrid-from-email" },
+        SENDGRID_REPLY_TO_EMAIL: { secretRef: "sendgrid-reply-to-email" },
         SENDGRID_FROM_NAME: { secretRef: "sendgrid-from-name" },
         SENDGRID_EVENT_WEBHOOK_PUBLIC_KEY: { secretRef: "sendgrid-event-key" },
         SENDGRID_REGION: { secretRef: "sendgrid-region" },
@@ -155,12 +185,14 @@ test("configured SendGrid settings render only Azure secret references", () => {
 test("removing optional SendGrid values clears their app bindings", () => {
     const { flags, args } = syncSecrets({ key: "SG.test-secret", email: "booth@example.com" });
     assert.equal(flags.SENDGRID_CONFIGURED, "true");
+    assert.ok(!args.some(arg => arg.startsWith("sendgrid-reply-to-email=")));
     assert.ok(!args.some(arg => arg.startsWith("sendgrid-from-name=")));
     assert.ok(!args.some(arg => arg.startsWith("sendgrid-event-key=")));
     assert.ok(!args.some(arg => arg.startsWith("sendgrid-region=")));
     assert.deepEqual(render(flags), {
         SENDGRID_API_KEY: { secretRef: "sendgrid-key" },
         SENDGRID_FROM_EMAIL: { secretRef: "sendgrid-from-email" },
+        SENDGRID_REPLY_TO_EMAIL: { value: "" },
         SENDGRID_FROM_NAME: { value: "" },
         SENDGRID_EVENT_WEBHOOK_PUBLIC_KEY: { value: "" },
         SENDGRID_REGION: { value: "" },

@@ -53,3 +53,43 @@ test("kiosk output is not published before its MMS derivative", async () => {
         fs.rmSync(downloadDir, { recursive: true, force: true });
     }
 });
+
+test("consented kiosk original is published before the finished portrait commit marker", async () => {
+    const downloadDir = fs.mkdtempSync(path.join(os.tmpdir(), "kiosk-publish-consented-"));
+    const getDownloadDir = settings.getDownloadDir;
+    const rename = fs.promises.rename;
+    const job = {
+        kioskSubmission: true,
+        kioskOriginalPublic: true,
+        eventName: "Kiosk Publish Test",
+        filePrefix: `kiosk_consent_publish_${process.pid}`,
+        style: "cartoon",
+    };
+    settings.getDownloadDir = () => downloadDir;
+
+    try {
+        const staged = jobPaths(job, { staged: true });
+        const published = jobPaths(job);
+        fs.writeFileSync(staged.inputPath, "consented selfie");
+        fs.writeFileSync(staged.mmsPath, "mms derivative");
+        fs.writeFileSync(staged.outputPath, "finished portrait");
+
+        fs.promises.rename = async (src, dst) => {
+            if (dst === published.outputPath) throw new Error("interrupted before output commit");
+            return rename(src, dst);
+        };
+        await assert.rejects(moveStagedToFinal(job), /interrupted before output commit/);
+        assert.equal(fs.readFileSync(published.inputPath, "utf8"), "consented selfie");
+        assert.equal(fs.readFileSync(published.mmsPath, "utf8"), "mms derivative");
+        assert.equal(fs.existsSync(published.outputPath), false);
+
+        fs.promises.rename = rename;
+        await moveStagedToFinal(job);
+        assert.equal(fs.readFileSync(published.inputPath, "utf8"), "consented selfie");
+        assert.equal(fs.readFileSync(published.outputPath, "utf8"), "finished portrait");
+    } finally {
+        fs.promises.rename = rename;
+        settings.getDownloadDir = getDownloadDir;
+        fs.rmSync(downloadDir, { recursive: true, force: true });
+    }
+});

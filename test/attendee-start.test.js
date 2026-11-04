@@ -144,6 +144,20 @@ test("full notice is public only for the active event and escapes configured tex
     assert.equal(stale.status, 404);
 });
 
+test("kiosk notice discloses public original photos without changing message-channel terms", async () => {
+    const regular = await fetch(baseUrl + "/start/notice?event=Active+Event&lang=en");
+    const kioskEnglish = await fetch(baseUrl + "/start/notice?event=Active+Event&lang=en&kiosk=1");
+    const kioskPortuguese = await fetch(baseUrl + "/start/notice?event=Active+Event&lang=pt_BR&kiosk=1");
+    const kioskEnglishBody = await kioskEnglish.text();
+    const kioskPortugueseBody = await kioskPortuguese.text();
+
+    assert.match(await regular.text(), /retained only as long as necessary to generate your portrait/);
+    assert.match(kioskEnglishBody, /original photo.*finished portrait.*public photo book/i);
+    assert.match(kioskPortugueseBody, /foto original.*retrato final.*álbum público/i);
+    assert.doesNotMatch(kioskEnglishBody, /Marketing Enrollment|When you message the booth|Text STOP/);
+    assert.doesNotMatch(kioskPortugueseBody, /Inscrição em Marketing|Ao enviar uma mensagem para a cabine|Envie PARAR/);
+});
+
 test("chooser rejects unsafe, duplicate, unknown, and non-read requests", async () => {
     const requests = await Promise.all([
         fetch(`${baseUrl}/start?event=..%2Fsecret`),

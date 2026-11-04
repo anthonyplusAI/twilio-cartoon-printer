@@ -292,6 +292,81 @@ test("kiosk email attaches the finished portrait and records SendGrid acceptance
     }
 });
 
+test("paused kiosk email remains retryable and releases the portrait for Print Relay", async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "kiosk-email-paused-"));
+    const prefix = `kiosk_email_paused_${process.pid}`;
+    const filename = `${prefix}.json`;
+    const readyPath = path.join(READY_DIR, filename);
+    const original = {
+        pause: process.env.KIOSK_EMAIL_PAUSED,
+        sendKioskEmail: kioskEmail.sendKioskEmail,
+        getDownloadDir: settings.getDownloadDir,
+        get: settings.get,
+    };
+    process.env.KIOSK_EMAIL_PAUSED = "true";
+    settings.getDownloadDir = () => root;
+    settings.get = (key, ...args) => key === "printRelayKey"
+        ? "kiosk-paused-relay-key" : original.get.call(settings, key, ...args);
+    let sends = 0;
+    kioskEmail.sendKioskEmail = async () => {
+        sends++;
+        return { status: "accepted", providerId: "sg-should-not-send" };
+    };
+    const job = {
+        filePrefix: prefix, eventName: "Paused Email Event", baseUrl: "https://example.test",
+        kioskSubmission: true, channel: "email", kioskEmail: "guest@example.test",
+        kioskDeliveryState: "pending", kioskDeliveryAttempts: 0,
+        digitalDeliveryPendingAt: Date.now(), readyAt: Date.now(),
+        outputProfile: { orientation: "portrait", printSize: "4x6" },
+    };
+    fs.mkdirSync(READY_DIR, { recursive: true });
+    fs.writeFileSync(path.join(root, `${prefix}_output.png`), "portrait");
+    fs.writeFileSync(readyPath, JSON.stringify(job));
+    const app = express();
+    mountPrintRelay(app);
+    let server;
+    try {
+        await assert.rejects(__sendDigitalDeliveryForTest(job, filename, "deliveryDigital", READY_DIR), /pending/i);
+        const saved = JSON.parse(fs.readFileSync(readyPath, "utf8"));
+        assert.equal(sends, 0, "an existing queued email must not reach SendGrid while paused");
+        assert.equal(saved.kioskDeliveryState, "pending");
+        assert.equal(saved.kioskDeliveryAttempts, 0);
+        assert.equal(saved.digitalDeliveryPendingAt, undefined);
+
+        server = await new Promise((resolve, reject) => {
+            const listening = app.listen(0, "127.0.0.1", () => resolve(listening));
+            listening.on("error", reject);
+        });
+        const response = await new Promise((resolve, reject) => {
+            const req = http.request({
+                hostname: "127.0.0.1", port: server.address().port,
+                path: `/api/print-relay/jobs?event=${encodeURIComponent(job.eventName)}`,
+                headers: { "x-relay-key": "kiosk-paused-relay-key" },
+            }, (res) => {
+                let body = "";
+                res.on("data", (chunk) => { body += chunk; });
+                res.on("end", () => resolve({ status: res.statusCode, body: JSON.parse(body) }));
+            });
+            req.on("error", reject);
+            req.end();
+        });
+        assert.equal(response.status, 200);
+        assert.equal(response.body.jobs.some((item) => item.filename === filename), true);
+    } finally {
+        if (server) await new Promise((resolve) => {
+            server.close(resolve);
+            server.closeAllConnections();
+        });
+        if (original.pause === undefined) delete process.env.KIOSK_EMAIL_PAUSED;
+        else process.env.KIOSK_EMAIL_PAUSED = original.pause;
+        kioskEmail.sendKioskEmail = original.sendKioskEmail;
+        settings.getDownloadDir = original.getDownloadDir;
+        settings.get = original.get;
+        fs.rmSync(readyPath, { force: true });
+        fs.rmSync(root, { recursive: true, force: true });
+    }
+});
+
 test("a signed provider callback can bind its SID before API acceptance is saved", async () => {
     const prefix = `kiosk_callback_${process.pid}`;
     const jobPath = path.join(DONE_DIR, `${prefix}.json`);
@@ -897,6 +972,7 @@ test("kiosk review reanalysis preserves its private selfie and pinned references
                 variantIndex: index, variantCount: 2, eventName: "Reanalysis Event",
                 messageSid: "api-reanalyze", userPhone: "api:reanalysis", channel: "email",
                 kioskEmail: "guest@example.test", kioskSubmission: true, apiSubmission: true,
+                kioskOriginalPublic: true,
                 style: "painted", background: null, brand: null, locale: "en",
                 outputProfile: { orientation: "portrait" },
                 kioskEventSnapshot: {
@@ -920,6 +996,7 @@ test("kiosk review reanalysis preserves its private selfie and pinned references
             if (job.reanalyzedFrom !== parentId) continue;
             newFiles.push(filename);
             assert.equal(job.kioskSubmission, true);
+            assert.equal(job.kioskOriginalPublic, true);
             assert.equal(job.kioskEmail, "guest@example.test");
             assert.match(job.parentJobId, /^\d{8}_\d{6}_[a-f0-9]{32}$/);
             assert.equal(fs.readFileSync(jobPaths(job, { staged: true }).inputPath, "utf8"), "private selfie");
