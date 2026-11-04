@@ -120,7 +120,7 @@ See [Installation](#installation), [Usage](#usage), and [Cloud Deployment](#clou
 - **Node.js** 22+
 - **pnpm** -- install with `npm install -g pnpm` ([docs](https://pnpm.io/installation))
 - **Twilio account** with an SMS/MMS sender, a Messaging Service, or a WhatsApp sender
-- **SendGrid account** with a verified sender (optional, for kiosk email delivery)
+- **SendGrid account** with an authenticated sending domain (optional, for kiosk email delivery)
 - **OpenAI API key** with access to the configured text and image models (`gpt-5.5`, `gpt-5.4-nano`, and `gpt-image-2-2026-04-21` by default)
 - **Google OAuth client** for the admin UI (`/home`, `/home/settings`, `/dashboard`, `/outreach`, and settings APIs)
 - **Printer** (optional) -- Epson EcoTank ET-8550 recommended, connected via USB/WiFi and registered in CUPS
@@ -205,21 +205,22 @@ An operator signs in and opens `/kiosk` on the event device. The launch step rep
 
 Open the kiosk on the camera device over HTTPS (or `localhost` during local development); camera access is unavailable to a plain HTTP page on another device.
 
-A guest takes a photo, previews or retakes it, then chooses from the active event's enabled art styles, brand themes, and backgrounds. They choose **one** configured delivery method (SMS, WhatsApp, or email), enter that destination, and agree to AI processing and public display of the finished portrait. WhatsApp requires a separate opt-in. The screen clears the guest's photo and contact details after submission or inactivity.
+A guest takes a photo, previews or retakes it, then chooses from the active event's enabled art styles, brand themes, and backgrounds. They choose **one** configured delivery method (SMS, WhatsApp, or email), enter that destination, and agree to AI processing and public display of both the original photo and finished portrait. WhatsApp requires a separate opt-in. The screen clears the guest's photo and contact details after submission or inactivity.
 
-The kiosk confirms when a job is **queued**. Once generation and any required review finish, the portrait appears in `/photogallery`; the original kiosk selfie remains private and is removed after publication. SMS and WhatsApp delivery use Twilio; email sends the finished image as a SendGrid attachment. With **Print + Digital**, the same kiosk job also enters the local printer or Print Relay queue. Kiosk digital delivery starts immediately after approval even if the event's general digital delivery setting waits for printing.
+The kiosk confirms when a job is **queued**. Once generation and any required review finish, the portrait and original photo appear in `/photogallery`; **View Original** and Space flip between them in the photo book and combo display. Kiosk photos submitted under the earlier consent remain private if their originals still exist, and originals already deleted after publication cannot be restored. SMS and WhatsApp delivery use Twilio; email sends the finished image as a SendGrid attachment. With **Print + Digital**, the same kiosk job also enters the local printer or Print Relay queue. Kiosk digital delivery starts immediately after approval even if the event's general digital delivery setting waits for printing.
 
-To offer email, configure a SendGrid Mail Send API key and a verified sender in your deployment environment (or local `.env`):
+To offer email, configure a SendGrid Mail Send API key and a From address on a domain authenticated in that SendGrid account. The domain in `SENDGRID_FROM_EMAIL` must match the authenticated domain; verifying only the mailbox as a Single Sender does not make its domain pass DMARC. Gmail can reject mail from an unauthenticated domain with `550 5.7.26`.
 
 ```sh
 SENDGRID_API_KEY=SG.your-api-key
 SENDGRID_FROM_EMAIL=portraits@example.com
 # SENDGRID_FROM_NAME=AI Photo Booth
+# SENDGRID_REPLY_TO_EMAIL=team@example.com  # optional monitored inbox
 # SENDGRID_REGION=eu  # EU regional subusers only
 # SENDGRID_EVENT_WEBHOOK_PUBLIC_KEY=your-base64-public-verification-key
 ```
 
-The per-event **Booth display → Kiosk email** switch controls whether configured email appears. SMS and WhatsApp follow the event's channel switches; WhatsApp also needs an approved `delivery` Content SID for each offered language. Set `BASE_URL` to the public HTTPS app origin so portrait links and Twilio delivery callbacks work. SendGrid's `202` response means it accepted the email for processing. To track email delivery and bounces, configure a **Signed Event Webhook** for `https://your-app.example.com/api/kiosk-delivery/sendgrid-events`, enable delivery and failure events, and set its public verification key above. Without that webhook, email status remains `accepted`. Twilio status callbacks distinguish accepted messages from delivered or failed messages. Staff can see generation, delivery, and print status in **Outreach → Kiosk**, or inspect `/api/generate/<job-id>/status` with an admin session.
+The per-event **Booth display → Kiosk email** switch controls whether configured email appears. Set `KIOSK_EMAIL_PAUSED=true` to hide email for every event and pause queued kiosk email sends while keeping their jobs for later retry; SMS, WhatsApp, and printing continue. This repository's Azure deploy defaults the pause to `true`; after an approved sending domain is authenticated and tested, set the GitHub Actions repository variable `KIOSK_EMAIL_PAUSED=false` and redeploy to enable email where the event switch is on. SMS and WhatsApp follow the event's channel switches; WhatsApp also needs an approved `delivery` Content SID for each offered language. Set `BASE_URL` to the public HTTPS app origin so portrait links and Twilio delivery callbacks work. SendGrid's `202` response means it accepted the email for processing. To track email delivery and bounces, configure a **Signed Event Webhook** for `https://your-app.example.com/api/kiosk-delivery/sendgrid-events`, enable delivery and failure events, and set its public verification key above. Without that webhook, email status remains `accepted`. Twilio status callbacks distinguish accepted messages from delivered or failed messages. Staff can see generation, delivery, and print status in **Outreach → Kiosk**, or inspect `/api/generate/<job-id>/status` with an admin session.
 
 For this repository's Azure deployment, add the SendGrid values through GitHub Actions secrets and variables, then redeploy. See [SendGrid kiosk email on Azure](docs/GUIDE.md#sendgrid-kiosk-email-on-azure) for the exact setup steps.
 

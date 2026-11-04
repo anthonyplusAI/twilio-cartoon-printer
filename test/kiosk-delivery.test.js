@@ -16,7 +16,7 @@ const { mountApiGenerate } = require("../lib/api-generate");
 const { getKioskDeliveryChannels, resolveKioskDeliveryChannel } = require("../lib/kiosk-delivery");
 
 function dependencies({ sms = true, whatsapp = true, email = true, showSms = true,
-    showWhatsapp = true, showEmail = true, deliverySid = "HXdelivery" } = {}) {
+    showWhatsapp = true, showEmail = true, deliverySid = "HXdelivery", emailPaused = false } = {}) {
     const eventSettings = { boothShowSms: showSms, boothShowWhatsapp: showWhatsapp, boothShowEmail: showEmail };
     return {
         settingsModule: {
@@ -28,6 +28,7 @@ function dependencies({ sms = true, whatsapp = true, email = true, showSms = tru
             whatsapp: { isConfigured: () => whatsapp },
         },
         emailProvider: { isConfigured: () => email },
+        env: { KIOSK_EMAIL_PAUSED: emailPaused ? "true" : "false" },
     };
 }
 
@@ -36,6 +37,16 @@ test("kiosk offers only event-enabled, configured delivery methods", () => {
     assert.deepEqual(getKioskDeliveryChannels("Event", "en", dependencies({ deliverySid: "" })), ["sms", "email"]);
     assert.deepEqual(getKioskDeliveryChannels("Event", "en", dependencies({ showEmail: false })), ["sms", "whatsapp"]);
     assert.deepEqual(getKioskDeliveryChannels("Event", "en", dependencies({ sms: false, whatsapp: false })), ["email"]);
+});
+
+test("global kiosk email pause hides email and rejects an already-open email form", () => {
+    const paused = dependencies({ emailPaused: true });
+    assert.deepEqual(getKioskDeliveryChannels("Event", "en", paused), ["sms", "whatsapp"]);
+    assert.throws(() => resolveKioskDeliveryChannel({
+        requestedChannel: "email", hasEmail: true, kioskSubmission: true,
+        eventName: "Event", locale: "en",
+    }, paused), (error) => error.code === "CHANNEL_UNAVAILABLE");
+    assert.deepEqual(getKioskDeliveryChannels("Event", "en", dependencies()), ["sms", "whatsapp", "email"]);
 });
 
 test("kiosk requires one matching destination and an explicit channel", () => {
@@ -131,6 +142,7 @@ test("kiosk POST stages privately, queues selected delivery, and deduplicates re
         assert.equal(job.baseUrl, "https://booth.example.test");
         assert.equal(job.userPhone, phone);
         assert.equal(job.kioskSubmission, true);
+        assert.notEqual(job.kioskOriginalPublic, true);
         assert.equal(job.imageUrl, "");
         assert.equal(job.kioskEventSnapshot.eventSettings.immediateDigitalDelivery, true);
         assert.equal(job.kioskEventSnapshot.eventSettings.enablePrinting, true);
@@ -152,12 +164,13 @@ test("kiosk POST stages privately, queues selected delivery, and deduplicates re
         const emailId = crypto.randomUUID();
         requestIds.push(emailId);
         const emailed = await submit({
-            event: "KioskEvent", kiosk: "1", requestId: emailId, consent: "1",
+            event: "KioskEvent", kiosk: "1", requestId: emailId, consent: "2",
             style: "cartoon", channel: "email", email: "guest@example.com", locale: "en",
         });
         assert.equal(emailed.status, 202, JSON.stringify(emailed.body));
         prefixes.push(emailed.body.filePrefix);
         const emailJob = JSON.parse(fs.readFileSync(path.join(PENDING_DIR, `${emailed.body.filePrefix}.json`), "utf8"));
+        assert.equal(emailJob.kioskOriginalPublic, true);
         assert.equal(emailJob.kioskEmail, "guest@example.com");
         assert.notEqual(emailJob.noDelivery, true);
         assert.equal(emailJob.channel, "email");

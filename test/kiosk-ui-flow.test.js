@@ -102,6 +102,7 @@ test("kiosk page offers one delivery method and keeps personal data out of URLs"
     assert.match(html, /name="deliveryChannel" value="email"/);
     assert.match(html, /Demo &lt;Event&gt;/);
     assert.match(html, /public photo book/);
+    assert.match(html, /href="\/start\/notice\?event=Demo\+%3CEvent%3E&amp;lang=en&amp;kiosk=1"/);
     assert.match(html, /autocomplete="off"/);
     assert.doesNotMatch(html, /href="\/home"|id="user-bar"/);
     assert.match(html, /fetch\("\/api\/generate"/);
@@ -321,7 +322,7 @@ test("email kiosk retries one capture with one request ID and clears guest data 
     assert.equal(first.get("channel"), "email");
     assert.equal(first.get("email"), "guest@example.test");
     assert.equal(first.get("phone"), null);
-    assert.equal(first.get("consent"), "1");
+    assert.equal(first.get("consent"), "2");
     assert.equal(element("emailInput").value, "");
     assert.equal(element("preview").src, "");
     assert.deepEqual(browser.urlsRevoked, ["blob:captured-photo"]);

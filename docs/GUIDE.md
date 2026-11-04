@@ -66,8 +66,10 @@ This document covers all features and configuration in depth. For quick setup, s
 | `TWILIO_WHATSAPP_NUMBER` | Conditional | WhatsApp sender in E.164 format. Required for direct WhatsApp sending unless you use `TWILIO_WHATSAPP_MESSAGING_SERVICE_SID`. |
 | `TWILIO_WHATSAPP_MESSAGING_SERVICE_SID` | Conditional | Messaging Service SID for WhatsApp sending. Configure this or `TWILIO_WHATSAPP_NUMBER` for WhatsApp support. |
 | `SENDGRID_API_KEY` | Kiosk email | SendGrid Mail Send API key. Required together with `SENDGRID_FROM_EMAIL` to offer email in kiosk mode. |
-| `SENDGRID_FROM_EMAIL` | Kiosk email | Verified SendGrid sender or an address on an authenticated sending domain. |
+| `SENDGRID_FROM_EMAIL` | Kiosk email | Address on a domain authenticated in the SendGrid account. |
+| `KIOSK_EMAIL_PAUSED` | No | `true` hides email for every kiosk and pauses queued email sends without stopping SMS, WhatsApp, or printing. This repository's Azure deploy defaults to `true`; set `false` only after the sending domain is authenticated and tested. |
 | `SENDGRID_FROM_NAME` | No | Optional display name for kiosk portrait email. |
+| `SENDGRID_REPLY_TO_EMAIL` | No | Optional monitored inbox for guest replies; can use a different domain from the authenticated From address. |
 | `SENDGRID_REGION` | No | Set to `eu` only for a SendGrid EU regional subuser; omit for the global API. |
 | `SENDGRID_EVENT_WEBHOOK_PUBLIC_KEY` | No | Base64 public verification key from a signed SendGrid Event Webhook; enables delivered/bounce status tracking. |
 | `OPENAI_API_KEY` | Yes | Your OpenAI API key |
@@ -211,7 +213,7 @@ An operator signs in and opens `/kiosk` to launch the event device. `/kiosk/laun
 
 Load the kiosk over HTTPS on the camera device, or use `localhost` for local development. A plain HTTP page opened from another device cannot access its camera.
 
-At `/kiosk`, guests take a photo, preview or retake it, and select the active event's enabled art style, brand theme, and background choices. They choose exactly one available delivery method and enter the corresponding phone number or email address. Before submitting, they agree to AI processing and public display of the finished portrait; WhatsApp has a separate opt-in checkbox. The request is tied to the event shown on screen, so a concurrent event switch asks the guest to start again. The kiosk clears the guest's photo and contact information after submission or inactivity.
+At `/kiosk`, guests take a photo, preview or retake it, and select the active event's enabled art style, brand theme, and background choices. They choose exactly one available delivery method and enter the corresponding phone number or email address. Before submitting, they agree to AI processing and public display of the original photo and finished portrait; WhatsApp has a separate opt-in checkbox. The linked participation notice explains kiosk photo retention separately from messaging-channel terms. The request is tied to the event shown on screen, so a concurrent event switch asks the guest to start again. The kiosk clears the guest's photo and contact information after submission or inactivity.
 
 The event portrait limit applies per phone number for SMS/WhatsApp and per email address for email delivery.
 
@@ -219,9 +221,9 @@ Channel availability follows the event settings and provider setup:
 
 - **SMS:** enable the event's SMS channel and configure an SMS sender or Messaging Service.
 - **WhatsApp:** enable the event's WhatsApp channel, configure its sender, and provide an approved `delivery` Content SID for the guest's language. The template allows the kiosk to send the portrait without an inbound WhatsApp conversation.
-- **Email:** set `SENDGRID_API_KEY` and a verified `SENDGRID_FROM_EMAIL`, then leave **Booth display → Kiosk email → Offer email delivery in kiosk mode** on for the event. The finished portrait is attached to the SendGrid email. To track delivery and bounces, create a Signed Event Webhook at `https://your-app.example.com/api/kiosk-delivery/sendgrid-events`, enable delivery/failure events, and set `SENDGRID_EVENT_WEBHOOK_PUBLIC_KEY` to its public verification key.
+- **Email:** set `SENDGRID_API_KEY` and `SENDGRID_FROM_EMAIL` on a SendGrid authenticated domain, set `KIOSK_EMAIL_PAUSED=false`, then leave **Booth display → Kiosk email → Offer email delivery in kiosk mode** on for the event. The finished portrait is attached to the SendGrid email. `KIOSK_EMAIL_PAUSED=true` hides email across events and holds queued email delivery while printing continues. To track delivery and bounces, create a Signed Event Webhook at `https://your-app.example.com/api/kiosk-delivery/sendgrid-events`, enable delivery/failure events, and set `SENDGRID_EVENT_WEBHOOK_PUBLIC_KEY` to its public verification key.
 
-The success screen means **queued**, not delivered. After generation and any human or AI review, the finished portrait appears in the photo book and is sent through the chosen method. Kiosk source photos are staged privately and removed after publication; the photo book does not offer kiosk originals. With **Print + Digital**, kiosk jobs still reach the connected printer or Print Relay app. Their digital copy is sent immediately after the portrait is ready, even if the general event setting waits for printing. Print completion does not send a second copy.
+The success screen means **queued**, not delivered. After generation and any human or AI review, the finished portrait is sent through the chosen method. For new kiosk submissions with explicit original-display consent, the original photo and finished portrait appear in the public photo book, where **View Original** and Space flip between them in both photo book and combo display modes. Earlier kiosk submissions remain private, and previously deleted originals cannot be restored. With **Print + Digital**, kiosk jobs still reach the connected printer or Print Relay app. Their digital copy is sent immediately after the portrait is ready, even if the general event setting waits for printing. Print completion does not send a second copy.
 
 **Outreach → Kiosk** shows each portrait's generation, delivery, and print state, refreshes automatically, and flags failed or uncertain sends for staff. The admin-only `GET /api/generate/<job-id>/status` response also reports generation state and `delivery.state`. For SMS and WhatsApp, Twilio callbacks can advance `accepted` to `delivered` or `failed`. A configured signed SendGrid Event Webhook does the same for email; without it, `accepted` means SendGrid's API accepted the email, not that it reached the inbox. Explicit rate limits receive bounded retries. A network error, server error, or interrupted send with an unknown provider result is marked `uncertain` for operator review to avoid an automatic duplicate. A failed AI generation remains visible in the job status rather than sending an out-of-session WhatsApp message.
 
@@ -229,7 +231,7 @@ Before opening the kiosk to guests:
 
 1. Check the active event's style, brand/background menus, delivery switches, review mode, and print mode. Set `BASE_URL` to the public HTTPS origin for portrait links and Twilio callbacks.
 2. Use your own test phone and email to submit one kiosk portrait through every offered channel. Verify the destination receives the finished image; for WhatsApp, test the locale-specific approved template and opt-in.
-3. Verify the finished output appears in `/photogallery` after review, and that no kiosk original appears there.
+3. Verify the finished output and original appear in `/photogallery` after review. Check **View Original** and Space flip in photo book and combo display modes.
 4. If printing is enabled, verify a physical print from the local printer or Print Station while the digital copy arrives independently. Landscape jobs require Print Station 1.3.0 or newer. Check the job's `delivery.state` and dashboard/logs if a send or print fails.
 
 ### Home Page
@@ -268,6 +270,8 @@ Auto-generated booth QRs open the public `/start` page first. The **Continue wit
 The full participation terms have six sections: **Privacy Notice**, **Marketing Enrollment**, **AI Portrait Generation**, **Data Collection**, **Photo Retention**, and **Terms of Service**. **Marketing Enrollment** describes enrollment for everyone who sends the starter message. The terms link Twilio's Privacy Notice and Terms. **Legal Text** adds a separate event-specific section; a configured **Terms URL** adds an additional event-terms link when it differs from Twilio's Terms URL.
 
 The **Photo Retention** section promises that the original photo is kept only as long as needed to generate the portrait and deleted following the event. This is an operator commitment: V1 does not enforce that retention limit or automatically delete photos when the event ends. Staff need a cleanup process before live use; `/home/settings` > **Reset & data** > **Clear event data** provides a manual event-data deletion action.
+
+Kiosk guests instead see a kiosk-specific notice explaining that consented originals and finished portraits appear in the public photo book until staff clear the event's photos. The messaging-channel notice above is unchanged.
 
 The channel buttons match the event setup:
 
@@ -316,7 +320,7 @@ The photo book at `/photogallery` presents AI-generated portraits as an open two
 - Open book layout with left and right pages showing different portraits
 - Realistic page-turn animations powered by turn.js (drag corners or use arrows)
 - Stacked page layers and book cover for a realistic book depth effect
-- Per-page "View Original" buttons for channels that publish an original selfie; kiosk originals stay private
+- Per-page "View Original" buttons and Space flip for images with published originals, including new kiosk submissions with original-display consent
 - Page numbers on each page (highest to lowest, newest to oldest)
 - White photo frame mat around each image with decorative corner mounts
 - Auto-rotates through spreads every 10 seconds
@@ -681,16 +685,16 @@ Set `DATA_MOUNT` to customize the mount path (defaults to `/app/appdata`). The D
 
 ### SendGrid kiosk email on Azure
 
-The repository's **Deploy to Azure Container Apps** workflow reads the SendGrid API key from a GitHub Actions repository secret and the other SendGrid settings from repository variables. The workflow passes them to the Container App. A local `.env` file does not configure the Azure deployment. Email appears in the kiosk only when the API key and From address are configured and the event's **Booth display → Kiosk email → Offer email delivery in kiosk mode** switch is on.
+The repository's **Deploy to Azure Container Apps** workflow reads the SendGrid API key from a GitHub Actions repository secret and the other SendGrid settings from repository variables. The workflow passes them to the Container App. A local `.env` file does not configure the Azure deployment. Email appears in the kiosk only when the API key and From address are configured, the GitHub Actions repository variable `KIOSK_EMAIL_PAUSED` is explicitly `false`, and the event's **Booth display → Kiosk email → Offer email delivery in kiosk mode** switch is on. The Azure deploy defaults `KIOSK_EMAIL_PAUSED` to `true` so email stays off until a domain is ready.
 
-1. In SendGrid, open **Settings → Sender Authentication**. Authenticate the domain used by your From address and add the exact DNS records SendGrid provides, then verify them. A verified **Single Sender** can be used for an initial test.
+1. In [SendGrid Sender Authentication](https://app.sendgrid.com/settings/sender_auth), authenticate the exact domain used by your From address. Add the DNS records SendGrid provides, then click **Verify** and wait for the domain to show as authenticated. A subdomain must be authenticated separately. [Single Sender Verification](https://www.twilio.com/docs/sendgrid/for-developers/sending-email/sender-identity) confirms access to a mailbox but does not authenticate its domain for production delivery. For example, sending as `@twilio.com` requires Twilio's DNS administrators to authorize this SendGrid account; otherwise [Gmail can reject it under twilio.com's DMARC policy](https://support.google.com/mail/answer/3726730).
 2. Open **Settings → API Keys → Create API Key**, choose **Custom Access**, grant **Mail Send**, and copy the key when it is shown. Store it as the GitHub Actions repository **secret** `SENDGRID_API_KEY`.
-3. In the same GitHub repository, open **Settings → Secrets and variables → Actions → Variables**. Add `SENDGRID_FROM_EMAIL` with a verified address or an address on your authenticated domain. Optionally add `SENDGRID_FROM_NAME`. Add `SENDGRID_REGION=eu` only if your SendGrid account uses an EU regional subuser.
+3. In the same GitHub repository, open **Settings → Secrets and variables → Actions → Variables**. Set `SENDGRID_FROM_EMAIL` to an address on the authenticated domain from step 1. Optionally add `SENDGRID_FROM_NAME` and `SENDGRID_REPLY_TO_EMAIL` (a monitored inbox for guest replies). Add `SENDGRID_REGION=eu` only if your SendGrid account uses an EU regional subuser.
 4. For delivered and bounced status, create an enabled SendGrid **Event Webhook** under **Settings → Mail Settings → Event Webhooks**. Set its Post URL to `https://<your V1 app host>/api/kiosk-delivery/sendgrid-events`. Select **Processed**, **Deferred**, **Delivered**, **Bounce**, **Dropped**, and **Spam Report**. Enable **Signed Event Webhook**, save it, reopen it, and copy its **public verification key** into the GitHub Actions repository variable `SENDGRID_EVENT_WEBHOOK_PUBLIC_KEY`. Never use the private signing key.
-5. Deploy the V1 code from `main`, or run **Actions → Deploy to Azure Container Apps → Run workflow** after the code is on `main`. The app needs a new revision to load changed SendGrid settings. Then open the event's **Booth display** settings and enable **Offer email delivery in kiosk mode**.
-6. Test the webhook with SendGrid's **Test Your Integration** action, then send a real kiosk portrait to your own address. Confirm the attachment arrived, the finished portrait appears in the photo book, and **Outreach → Kiosk** advances from `accepted` to `delivered`. A SendGrid `202` response means the email was accepted for processing; only the webhook confirms delivery.
+5. Set the GitHub Actions repository **variable** `KIOSK_EMAIL_PAUSED=false` only after the sender domain is authenticated. Deploy the V1 code from `main`, or run **Actions → Deploy to Azure Container Apps → Run workflow** after the code is on `main`. The app needs a new revision to load changed SendGrid settings. Then open the event's **Booth display** settings and enable **Offer email delivery in kiosk mode**.
+6. Test the webhook with SendGrid's **Test Your Integration** action, then submit a new kiosk portrait to your own address (including a Gmail address if guests will use Gmail). Confirm the attachment arrived, the finished portrait appears in the photo book, and **Outreach → Kiosk** advances from `accepted` to `delivered`. A SendGrid `202` response means the email was accepted for processing; only the webhook confirms delivery. An earlier bounced kiosk job does not resend automatically after the sender is fixed.
 
-For local development or another hosting platform, put the same settings in the server's environment (or local `.env`) and restart it. The sender verification and signed webhook steps are the same.
+For local development or another hosting platform, put the same settings in the server's environment (or local `.env`) and restart it. The domain authentication and signed webhook steps are the same.
 
 ### Twilio webhook
 

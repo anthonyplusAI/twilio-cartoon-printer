@@ -10,6 +10,11 @@ test("SendGrid kiosk email is offered only with a key and sender", () => {
     assert.equal(isConfigured({ SENDGRID_API_KEY: "SG.example", SENDGRID_FROM_EMAIL: "booth@example.com" }), true);
     assert.equal(isConfigured({ SENDGRID_API_KEY: "SG.example" }), false);
     assert.equal(isConfigured({ SENDGRID_FROM_EMAIL: "booth@example.com" }), false);
+    assert.equal(isConfigured({
+        SENDGRID_API_KEY: "SG.example",
+        SENDGRID_FROM_EMAIL: "booth@example.com",
+        SENDGRID_REPLY_TO_EMAIL: "not-an-email",
+    }), false);
 });
 
 test("SendGrid receives the finished portrait as an attachment", async () => {
@@ -47,6 +52,30 @@ test("SendGrid receives the finished portrait as an attachment", async () => {
             kiosk_file_prefix: "kiosk-123",
         });
         assert.match(payload.content[0].value, /https:\/\/booth\.example\/s\/kiosk-123/);
+    } finally {
+        fs.rmSync(dir, { recursive: true, force: true });
+    }
+});
+
+test("SendGrid routes guest replies to the configured inbox", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "kiosk-email-reply-"));
+    const imagePath = path.join(dir, "portrait.jpg");
+    fs.writeFileSync(imagePath, Buffer.from([0xff, 0xd8, 0xff, 0]));
+    let payload;
+    try {
+        await sendKioskEmail({ kioskEmail: "guest@example.com", eventName: "Event" }, { imagePath }, {
+            env: {
+                SENDGRID_API_KEY: "SG.example",
+                SENDGRID_FROM_EMAIL: "portraits@example.com",
+                SENDGRID_REPLY_TO_EMAIL: "team@example.org",
+            },
+            fetchImpl: async (_url, options) => {
+                payload = JSON.parse(options.body);
+                return { status: 202, headers: { get: () => null } };
+            },
+        });
+        assert.deepEqual(payload.reply_to, { email: "team@example.org" });
+        assert.equal(payload.from.email, "portraits@example.com");
     } finally {
         fs.rmSync(dir, { recursive: true, force: true });
     }
