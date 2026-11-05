@@ -15,7 +15,7 @@
 
 <!-- Video hosted as a GitHub user attachment. -->
 
-{{GITHUB_VIDEO_URL}}
+https://github.com/user-attachments/assets/199f1ea9-4c8b-4ff6-a13b-1e8fcc3b2ccc
 
 *30-second overview of choosing a look, sending a photo, and receiving a portrait; event printing is optional.*
 
