@@ -11,6 +11,14 @@
 [![Relay App Release](https://github.com/anthonyplusAI/twilio-cartoon-printer/actions/workflows/relay-release.yml/badge.svg)](https://github.com/anthonyplusAI/twilio-cartoon-printer/actions/workflows/relay-release.yml)
 [![License: ISC](https://img.shields.io/badge/License-ISC-blue.svg)](#license)
 
+## Watch the launch film
+
+<!-- Video hosted as a GitHub user attachment. -->
+
+https://github.com/user-attachments/assets/199f1ea9-4c8b-4ff6-a13b-1e8fcc3b2ccc
+
+*30-second overview of choosing a look, sending a photo, and receiving a portrait; event printing is optional.*
+
 ## From photo to portrait
 
 Four photos, four very different results. Each source image sits beside the creative portrait it inspired.
